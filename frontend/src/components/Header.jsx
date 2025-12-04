@@ -24,7 +24,7 @@ export default function Header() {
             <User className="rounded-full" />
             <div className="user flex items-center gap-1.5">
                 <span className="user-name text-[var(--text-main)]">John Doe</span>
-                <ChevronDown className="cursor-pointer p-1" />
+                <a href="/settings"><ChevronDown className="cursor-pointer p-1" /></a>
             </div>
         </div>
     </div>
