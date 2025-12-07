@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 import React from "react";
-import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import MarkAttendance from "./pages/MarkAttendance";
 import StudentList from "./pages/StudentList";
@@ -16,6 +16,19 @@ import StudentDashboard from "./students/pages/StudentDashboard.jsx"
 import StudentSubjects from "./students/pages/StudentSubjects.jsx";
 import StudentForecast from "./students/pages/StudentForecast.jsx";
 import StudentProfile from "./students/pages/StudentProfile.jsx"
+
+function RedirectToHome() {
+  const storedUser = localStorage.getItem("user");
+  const user = storedUser ?  JSON.parse(storedUser) : null;
+
+  if(!user) return <Navigate to={"/login"} />
+
+  if(user.role === "Teacher") return <Navigate to={"/dashboard"} />
+  if(user.role === "Student") return <Navigate to={"/student-dashboard"} />
+
+  return <Navigate to={"/login"} />
+}
+
 
 
 const studentRoutes = [
@@ -41,7 +54,8 @@ export default function App() {
 
       <div className="p-6">
         <Routes>
-          <Route path="/" element={<Dashboard/>} />
+          <Route path="/" element={<RedirectToHome/>} />
+          <Route path="/dashboard" element={<Dashboard/>} />
           <Route path="/attendance" element={<MarkAttendance/>}/>
           <Route path="/students" element={<StudentList/>}/>
           <Route path="/analytics" element={<Analytics/>}/>

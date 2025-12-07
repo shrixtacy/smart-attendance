@@ -18,40 +18,39 @@ export default function Login() {
   const STUDENT_EMAIL = "student@gmail.com";
   const STUDENT_PASS = "student123";
 
-  const handleLogin = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
 
-    // Teacher Login
-    if(email === TEACHER_EMAIL && password === TEACHER_PASS) {
-      const userData = {
-        email : email,
-        role : "Teacher",
-      };
+    try{
+      const res = await fetch("http://127.0.0.1:8000/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-type" : "application/json",
+        },
+        body: JSON.stringify({email, password}),
+      });
 
-      if(remember){
-        localStorage.setItem("user", JSON.stringify(userData));
+      if(!res.ok){
+        const data = await res.json();
+        throw new Error(data.detail || "Login failed");
       }
 
-      navigate("/");
-      return;
-    }
+      const data = await res.json();
 
-    // Student Login
-    if(email === STUDENT_EMAIL && password === STUDENT_PASS) {
-      const userData = {
-        email : email,
-        role : "Student",
-      };
+      if(remember) localStorage.setItem("user", JSON.stringify(data));
 
-      if(remember){
-        localStorage.setItem("user", JSON.stringify(userData));
+      if(data.role === "Teacher"){
+        navigate("/dashboard");
+      } else if (data.role === "Student"){
+        navigate("/student-dashboard");
+      } else {
+        navigate("/login");
       }
-
-      navigate("/student-dashboard");
-      return;
     }
-
-    setError("Invalid email or password");
+    catch (err){
+      setError(err.message)
+    }
   }
 
   return (
@@ -90,7 +89,7 @@ export default function Login() {
             </div>
 
             {/* Form */}
-            <form className="space-y-6" onSubmit={handleLogin}>
+            <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-4">
                 
                 {/* Email Input */}

@@ -1,5 +1,5 @@
 # backend/main.py
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import base64
@@ -7,15 +7,51 @@ from typing import List, Dict
 from io import BytesIO
 from PIL import Image
 import uvicorn
+from dotenv import load_dotenv
 
+load_dotenv() 
 app = FastAPI(title="Smart Attendance API")
+
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
+
+# ---- Models ------
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+    
+class UserResponse(BaseModel):
+    email: str
+    role: str
+    name: str
+    
+# ---------- TEMP "DATABASE" ----------
+# For now: hardcoded users (later we connect real DB)
+FAKE_USERS = {
+    os.getenv("TEACHER_EMAIL"): {
+        "password": os.getenv("TEACHER_PASSWORD"),
+        "role": "Teacher",
+        "name": "Demo Teacher"
+    },
+    os.getenv("STUDENT_EMAIL"): {
+        "password": os.getenv("STUDENT_PASSWORD"),
+        "role": "Student",
+        "name": "Demo Student"
+    }
+}
+
+
 
 # --- in-memory stub DB ---
 STUDENTS = [
@@ -24,14 +60,23 @@ STUDENTS = [
     {"roll": "2122", "name": "Mira Singh", "attendance": 95}
 ]
 
-class LoginPayload(BaseModel):
-    email: str
-    password: str
 
-@app.post("/api/login")
-async def login(payload: LoginPayload):
+@app.post("/auth/login", response_model=UserResponse)
+async def login(payload: LoginRequest):
     # stub auth - replace with real auth
-    return {"ok": True, "token": "fake-jwt-token"}
+    email = payload.email
+    password = payload.password
+    
+    user = FAKE_USERS.get(email)
+    
+    if not user or user["password"] != password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    return UserResponse(
+        email=email,
+        role=user["role"],
+        name=user["name"]
+    )
 
 @app.get("/api/students")
 async def get_students():
