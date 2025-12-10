@@ -16,6 +16,7 @@ import StudentDashboard from "./students/pages/StudentDashboard.jsx"
 import StudentSubjects from "./students/pages/StudentSubjects.jsx";
 import StudentForecast from "./students/pages/StudentForecast.jsx";
 import StudentProfile from "./students/pages/StudentProfile.jsx"
+import OAuthCallback from "./pages/OAuthCallback.jsx";
 
 function RedirectToHome() {
   const storedUser = localStorage.getItem("user");
@@ -71,6 +72,8 @@ export default function App() {
           <Route path="/student-subjects" element={<StudentSubjects/>}/>
           <Route path="/student-forecast" element={<StudentForecast/>}/>
           <Route path="/student-profile" element={<StudentProfile/>}/>
+
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
 
         </Routes>
       </div>

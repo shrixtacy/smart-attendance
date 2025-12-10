@@ -3,5 +3,7 @@ uvicorn[standard]==0.32.1
 pillow==11.0.0
 pydantic==2.10.3
 python-multipart
-passlib
-email-validator
+authlib
+python-dotenv
+PyJWT
+itsdangerous

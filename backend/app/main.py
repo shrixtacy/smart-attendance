@@ -1,7 +1,15 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 
 from .core.config import APP_NAME, ORIGINS
+
+# Routes
 from .api.routes.auth import router as auth_router
 from .api.routes.students import router as students_router
 from .api.routes.attendance import router as attendance_router
@@ -17,6 +25,16 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+    )
+    
+    # SessionMiddleware MUST be added before routers so authlib can use request.session reliably
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=os.getenv("SESSION_SECRET_KEY", "kuch-to12hai-mujhse-raita"),
+        session_cookie="session",
+        max_age=14 * 24 * 3600,
+        same_site="lax",
+        https_only = False,
     )
 
     # Routers

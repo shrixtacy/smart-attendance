@@ -1,7 +1,12 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends, Request
+from fastapi.responses import RedirectResponse
+from authlib.integrations.starlette_client import OAuth
 from bson import ObjectId
 from datetime import datetime, timedelta
 import secrets
+import os
+from app.utils.jwt_token import create_jwt
+from urllib.parse import quote
 
 from ...schemas.auth import RegisterRequest, UserResponse, LoginRequest
 from ...core.security import hash_password, verify_password
@@ -9,8 +14,8 @@ from ...core.email import send_verification_email
 from ...core.config import BACKEND_BASE_URL
 from ...db.mongo import db
 
-
 router = APIRouter(prefix="/auth", tags=["Auth"])
+oauth = OAuth()
 
 @router.post("/register", response_model=UserResponse)
 async def register(payload: RegisterRequest, background_tasks: BackgroundTasks):
@@ -119,3 +124,55 @@ async def verify_email(token: str = Query(...)):
     )
     
     return {"message": "Email verified successfully. You can now log in.."}
+
+
+oauth.register(
+    name="google",
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+@router.get("/google")
+async def google_login(request: Request):
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+# Login via google
+@router.get("/google/callback")
+async def google_callback(request: Request):
+    token = await oauth.google.authorize_access_token(request)
+    
+    # Fetch user profile from Google userinfo
+    resp = await oauth.google.get("https://www.googleapis.com/oauth2/v3/userinfo",token=token)
+    google_user = resp.json()
+
+    email = google_user.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Unable to read email from Google account.")
+    
+    # Check if user exists in db or not
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(status_code=400, detail="No account associated with this Google email. Please sign up first.")
+    
+    # Create jwt token
+    user_id = str(user["_id"])
+    role = user["role"]
+    jwt_token = create_jwt(user_id, role)
+    
+    # Build redirect url for frontend
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+    # remove any trailing slash to avoid double slashes later
+    frontend_base = FRONTEND_BASE_URL.rstrip("/")
+    
+    redirect_url = (
+        f"{FRONTEND_BASE_URL}/oauth-callback"
+        f"#token={quote(jwt_token)}"
+        f"&email={quote(email)}"
+        f"&role={quote(role)}"
+    )
+    
+    # Redirect browser to frontend
+    return RedirectResponse(url=redirect_url)
