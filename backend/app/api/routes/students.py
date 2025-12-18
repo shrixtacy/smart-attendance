@@ -99,7 +99,7 @@ async def get_available_subjects(
             "name": sub["name"],
             "code": sub.get("code"),
             "type": sub.get("type"),
-            "professor_id": str(sub["professor_id"]),
+            "professor_ids": [str(pid) for pid in sub.get("professor_ids", [])],
             "created_at": sub["created_at"]
         }
         for sub in subjects

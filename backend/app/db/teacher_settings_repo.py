@@ -73,30 +73,58 @@ async def upsert(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     return res
 
 async def patch(user_id: str, patch_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Patch nested fields using dot-notation $set.
-    patch_payload is a nested dict (e.g., {"profile": {"name": "New"}}).
-    """
     if not isinstance(patch_payload, dict) or not patch_payload:
-        # nothing to patch; return existing doc
         return await get_by_user(user_id)
 
+    update_doc: Dict[str, Any] = {}
     set_map: Dict[str, Any] = {}
-    _flatten("", patch_payload, set_map)
 
-    if not set_map:
+    profile = patch_payload.get("profile", {})
+
+    # ---- HANDLE ARRAY OPERATORS (subjects) ----
+    if isinstance(profile.get("subjects"), dict):
+        subjects_op = profile["subjects"]
+
+        if "$addToSet" in subjects_op:
+            update_doc["$addToSet"] = {
+                "profile.subjects": subjects_op["$addToSet"]
+            }
+
+        # remove subjects from normal flattening
+        profile = {k: v for k, v in profile.items() if k != "subjects"}
+
+    # ---- HANDLE NORMAL $set FIELDS ----
+    remaining_payload = dict(patch_payload)
+    if profile:
+        remaining_payload["profile"] = profile
+    else:
+        remaining_payload.pop("profile", None)
+
+    _flatten("", remaining_payload, set_map)
+
+    if set_map:
+        set_map["updatedAt"] = datetime.utcnow()
+        update_doc["$set"] = set_map
+
+    # ---- ENSURE subjects ARRAY EXISTS ----
+    if "$addToSet" in update_doc:
+        await db[COL].update_one(
+            {"user_id": user_id},
+            {"$setOnInsert": {"profile.subjects": []}},
+            upsert=True,
+        )
+
+    if not update_doc:
         return await get_by_user(user_id)
 
-    set_map["updatedAt"] = datetime.utcnow()
-
-    # MUST pass 'update' as second positional argument
-    res = await db[COL].find_one_and_update(
+    return await db[COL].find_one_and_update(
         {"user_id": user_id},
-        {"$set": set_map},                 # <-- this is the 'update' arg
+        update_doc,
         upsert=True,
-        return_document=ReturnDocument.AFTER
+        return_document=ReturnDocument.AFTER,
     )
-    return res
+
+
 
 async def create_index_once():
     """Ensure user_id is unique/indexed at startup."""

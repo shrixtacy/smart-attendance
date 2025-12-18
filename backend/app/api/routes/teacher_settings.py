@@ -11,8 +11,11 @@ from app.services.teacher_settings_service import (
     replace_settings,
 )
 from app.db.teacher_settings_repo import create_index_once
+from app.db.subjects_repo import ensure_indexes as ensure_subject_indexes
 from app.utils.utils import serialize_bson
 from app.api.deps import get_current_teacher
+from app.services.subject_service import add_subject_for_teacher
+from app.db.subjects_repo import get_subjects_by_ids
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -20,6 +23,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 @router.on_event("startup")
 async def _ensure_indexes():
     await create_index_once()
+    await ensure_subject_indexes()
 
 # ---------------- GET SETTINGS ----------------
 @router.get("", response_model=dict)
@@ -29,6 +33,7 @@ async def get_settings(
     user_id = current["id"]
     user = current["user"]
     teacher = current["teacher"]
+    
 
     profile = {
         "id": user_id,
@@ -37,12 +42,19 @@ async def get_settings(
         "phone": teacher.get("profile", {}).get("phone", ""),
         "role": "teacher",
         "employee_id": teacher.get("employee_id"),
-        "subjects": teacher.get("subjects", []),
+        "subjects": teacher.get("profile", {}).get("subjects", []),
         "department": teacher.get("department"),
         "avatarUrl": teacher.get("avatarUrl"),
     }
 
     doc = await ensure_settings_for_user(user_id, profile)
+    
+    subject_ids = teacher.get("profile", {}).get("subjects", [])
+    populated_subjects = await get_subjects_by_ids(subject_ids)
+    print(subject_ids, populated_subjects)
+    
+    doc["profile"]["subjects"] = populated_subjects
+    
     return serialize_bson(doc)
 
 # ---------------- PATCH SETTINGS ----------------
@@ -96,3 +108,22 @@ async def upload_avatar(
         "avatarUrl": avatar_url,
         "settings": serialize_bson(updated),
     }
+    
+@router.post("/add-subject", response_model=dict)
+async def add_subject(
+    payload: dict,
+    current = Depends(get_current_teacher)
+):
+    name = payload.get("name")
+    code = payload.get("code")
+    
+    if not name or not code:
+        raise HTTPException(status_code=400, detail="Name and Code required")
+    
+    subject = await add_subject_for_teacher(
+        current["id"],
+        name.strip(),
+        code.strip().upper(),
+    )
+    
+    return serialize_bson(subject)

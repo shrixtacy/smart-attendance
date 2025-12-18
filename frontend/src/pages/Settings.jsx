@@ -24,10 +24,14 @@ import {
 } from "lucide-react";
 import SettingsSidebar from "../components/SettingsSidebar";
 import { useTheme } from "../theme/ThemeContext";
-import {getSettings, patchSettings, uploadAvatar} from "../api/settings"
+import {getSettings, patchSettings, uploadAvatar, addSubject} from "../api/settings"
+import AddSubjectModal from "../components/AddSubjectModal"
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("Thresholds");
+
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+
   
   // State for Thresholds
   const [warningVal, setWarningVal] = useState(75);
@@ -160,11 +164,32 @@ export default function Settings() {
   }
 
   // subject handlers
-  function addSubject(){
-    const subject = prompt("Enter subject name");
-    if(!subject) return;
-    setProfile(prev => ({...prev, subjects: [...prev.subjects, subject]}));
+  async function handleAddSubject(data) {
+    try {
+      // 1️⃣ Add subject (backend stores subject_id only)
+      await addSubject(data);
+
+      // 2️⃣ Re-fetch full settings (backend returns populated subjects)
+      const fresh = await getSettings();
+
+      // 3️⃣ Update profile from server (single source of truth)
+      setProfile({
+        name: fresh.profile?.name ?? "",
+        email: fresh.profile?.email ?? "",
+        phone: fresh.profile?.phone ?? "",
+        role: fresh.profile?.role ?? "",
+        subjects: fresh.profile?.subjects ?? [],
+        avatarUrl: fresh.profile?.avatarUrl ?? null,
+      });
+
+      setShowSubjectModal(false);
+    } catch (e) {
+      console.error("Add subject failed:", e);
+      setSaveError(e.response?.data?.detail || "Failed to add subject");
+    }
   }
+
+
   function removeSubject(idx){
     setProfile(prev => ({...prev, subjects: prev.subjects.filter((_,i) => i != idx)}));
   }
@@ -415,24 +440,21 @@ export default function Settings() {
                    <div className="flex flex-wrap gap-2">
                       {profile.subjects && profile.subjects.length > 0 ? (
                         profile.subjects.map((sub, idx) => (
-                          <div key={idx} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-sm font-medium flex items-center gap-2">
-                            <span>{sub}</span>
-                            <button
-                              onClick={() => removeSubject(idx)}
-                              className="hover:text-indigo-900"
-                              type="button"
-                              aria-label={`Remove ${sub}`}
-                            >
-                              <X size={14}/>
-                            </button>
+                          <div key={sub._id} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-sm font-medium flex items-center gap-2">
+                            <span>{sub.name} ({sub.code})</span>
                           </div>
                         ))
                       ) : (
                         <div className="text-sm text-slate-500">No subjects added</div>
                       )}
-                      <button onClick={addSubject} className="px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 rounded-full text-sm font-medium hover:border-indigo-400 hover:text-indigo-600 flex items-center gap-1 transition cursor-pointer">
+                      <button onClick={() => setShowSubjectModal(true)} className="px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 rounded-full text-sm font-medium hover:border-indigo-400 hover:text-indigo-600 flex items-center gap-1 transition cursor-pointer">
                         <Plus size={14} /> Add subject
                       </button>
+                      <AddSubjectModal 
+                        open={showSubjectModal}
+                        onClose={()=> setShowSubjectModal(false)}
+                        onSave={handleAddSubject}
+                      />
                    </div>
                 </div>
                 {saveError && <div className="text-sm text-rose-600">{saveError}</div>}

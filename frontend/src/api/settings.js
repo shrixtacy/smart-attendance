@@ -22,3 +22,10 @@ export const uploadAvatar = async (file) => {
 
   return res.data;
 };
+
+export const addSubject = async (payload) => {
+  const res = await api.post("/settings/add-subject", payload);
+  return res.data;
+};
+
+
