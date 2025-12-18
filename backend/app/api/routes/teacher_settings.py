@@ -171,8 +171,8 @@ async def get_subject_students(
     student_user_ids = [s["student_id"] for s in subject_students]
     
     # students collection
-    student = {
-        str(s["user_id"]): s
+    students_map = {
+        str(s["userId"]): s
         async for s in db.students.find({"user_id": {"$in": student_user_ids}})
     }
     
@@ -187,7 +187,7 @@ async def get_subject_students(
     for s in subject_students:
         uid = str(s["student_id"])
         user = users.get(uid)
-        student = student.get(uid)
+        student_doc = students_map.get(uid)
         
         if not user:
             continue
@@ -198,7 +198,7 @@ async def get_subject_students(
             "roll": user.get("roll"),      # ✅ now exists
             "year": user.get("year"),      # ✅ now exists
             "branch": user.get("branch"),
-            "avatar": student.get("image_url") if student else None,
+            "avatar": student_doc.get("image_url") if student_doc else None,
             "verified": s["verified"],
             "attendance": s["attendance"],
         })
@@ -255,7 +255,7 @@ async def remove_student(
 
     # 2️⃣ Remove subject from student.subjects
     await db.students.update_one(
-        {"user_id": student_oid},
+        {"userId": student_oid},
         {"$pull": {"subjects": subject_oid}}
     )
 

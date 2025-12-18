@@ -39,11 +39,11 @@ async def replace_settings(user_id: str, payload: Dict[str, Any]) -> Dict[str, A
 
 
 async def update_teacher_profile(user_id: str, profile: dict):
-    teacher = await db["teachers"].find_one({"user_id": user_id})
+    teacher = await db["teachers"].find_one({"userId": user_id})
 
     if teacher:
         await db["teachers"].update_one(
-            {"user_id": user_id},
+            {"userId": user_id},
             {"$set": {
                 "name": profile.get("name"),
                 "phone": profile.get("phone"),
@@ -55,7 +55,7 @@ async def update_teacher_profile(user_id: str, profile: dict):
     else:
         # Create teacher entry
         await db["teachers"].insert_one({
-            "user_id": user_id,
+            "userId": user_id,
             "name": profile.get("name"),
             "phone": profile.get("phone"),
             "subjects": profile.get("subjects", []),

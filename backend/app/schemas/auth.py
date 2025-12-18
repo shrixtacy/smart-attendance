@@ -22,6 +22,8 @@ class RegisterRequest(BaseModel):
     
     # Student
     branch: Optional[str] = None
+    roll: Optional[str] = None
+    year: Optional[str] = None
     
     # Teacher 
     employee_id: Optional[str] = None

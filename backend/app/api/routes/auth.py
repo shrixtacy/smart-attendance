@@ -51,6 +51,9 @@ async def register(payload: RegisterRequest, background_tasks: BackgroundTasks):
     
     if payload.role == "student" :
         user_doc["branch"] = payload.branch
+        user_doc["roll"] = payload.roll
+        user_doc["year"] = payload.year
+        
     elif payload.role == "teacher" :
         user_doc["employee_id"] = payload.employee_id
         user_doc["phone"] = payload.phone
@@ -66,7 +69,9 @@ async def register(payload: RegisterRequest, background_tasks: BackgroundTasks):
     try:
         if payload.role == "student":
             student_doc = {
-                "user_id": created_user_id,
+                "userId": created_user_id,
+                "name": payload.name,
+                "email": payload.name,
                 "branch": payload.branch,
                 "created_at": datetime.utcnow(),
             }
@@ -77,12 +82,12 @@ async def register(payload: RegisterRequest, background_tasks: BackgroundTasks):
             if not payload.phone:
                 raise HTTPException(status_code=400, detail="Phone number required")
             teacher_doc = {
-                "user_id": created_user_id,
+                "userId": created_user_id,
                 "employee_id": payload.employee_id,
                 "phone": payload.phone,
                 "created_at": datetime.utcnow(),
-                # add other teacher-specific fields if required
             }
+
             await db.teachers.insert_one(teacher_doc)
             
     except Exception as e:

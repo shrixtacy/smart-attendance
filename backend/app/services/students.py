@@ -15,7 +15,7 @@ async def get_student_profile(user_id: str):
         return None
 
     # 2. Get student document
-    student = await students_col.find_one({"user_id": ObjectId(user_id)})
+    student = await students_col.find_one({"userId": ObjectId(user_id)})
     if not student:
         return None
 
@@ -42,7 +42,7 @@ async def get_student_profile(user_id: str):
     # 5. Build clean API-safe profile
     profile = {
         "id": str(student["_id"]),
-        "user_id": str(student["user_id"]),
+        "userId": str(student["userId"]),
         "name": user.get("name"),
         "email": user.get("email"),
         "branch": user.get("branch") or student.get("branch"),

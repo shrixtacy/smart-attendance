@@ -70,7 +70,7 @@ async def upload_image_url(
     image_url = upload_result.get("secure_url")
 
     await db.students.update_one(
-        {"user_id": student_user_id},
+        {"userId": student_user_id},
         {"$set": {"image_url": image_url}}
     )
 
@@ -121,7 +121,7 @@ async def add_subject(
     student_oid = ObjectId(current_user["id"])
 
     # 1️⃣ Fetch student
-    student = await db.students.find_one({"user_id": student_oid})
+    student = await db.students.find_one({"userId": student_oid})
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
@@ -137,7 +137,7 @@ async def add_subject(
 
     # 3️⃣ Add subject to student (ID only)
     await db.students.update_one(
-        {"user_id": student_oid},
+        {"userId": student_oid},
         {"$addToSet": {"subjects": subject_oid}}
     )
 
@@ -188,7 +188,7 @@ async def remove_subject(
     
     # Remove subject from student
     result = await db.students.update_one(
-        {"user_id": user_oid},
+        {"userId": user_oid},
         {"$pull": {"subjects": subject_oid}}
     )
     

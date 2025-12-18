@@ -17,13 +17,13 @@ def _flatten(prefix: str, d: Dict[str, Any], out: Dict[str, Any]) -> None:
 
 async def get_by_user(user_id: str) -> Optional[Dict[str, Any]]:
     """Return the raw document or None"""
-    return await db[COL].find_one({"user_id": user_id})
+    return await db[COL].find_one({"userId": user_id})
 
 async def create_default(user_id: str, profile: dict):
     now = datetime.utcnow()
 
     default = {
-        "user_id": user_id,
+        "userId": user_id,
         "profile": {
             "name": profile.get("name", ""),
             "email": profile.get("email", ""),
@@ -52,9 +52,6 @@ async def create_default(user_id: str, profile: dict):
 
 
 async def upsert(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Replace or upsert fields provided in payload (payload should be a dict of top-level fields).
-    """
     if not isinstance(payload, dict) or not payload:
         # nothing to upsert; return existing document
         return await get_by_user(user_id)
@@ -64,7 +61,7 @@ async def upsert(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     # NOTE: we pass filter and update as positional args: (filter, update, ...)
     res = await db[COL].find_one_and_update(
-        {"user_id": user_id},
+        {"userId": user_id},
         {"$set": payload},                 # <-- required second positional arg 'update'
         upsert=True,
         return_document=ReturnDocument.AFTER
@@ -109,7 +106,7 @@ async def patch(user_id: str, patch_payload: Dict[str, Any]) -> Dict[str, Any]:
     # ---- ENSURE subjects ARRAY EXISTS ----
     if "$addToSet" in update_doc:
         await db[COL].update_one(
-            {"user_id": user_id},
+            {"userId": user_id},
             {"$setOnInsert": {"profile.subjects": []}},
             upsert=True,
         )
@@ -118,7 +115,7 @@ async def patch(user_id: str, patch_payload: Dict[str, Any]) -> Dict[str, Any]:
         return await get_by_user(user_id)
 
     return await db[COL].find_one_and_update(
-        {"user_id": user_id},
+        {"userId": user_id},
         update_doc,
         upsert=True,
         return_document=ReturnDocument.AFTER,
@@ -127,5 +124,9 @@ async def patch(user_id: str, patch_payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def create_index_once():
-    """Ensure user_id is unique/indexed at startup."""
-    await db[COL].create_index("user_id", unique=True)
+    await db[COL].create_index(
+    "userId",
+    unique=True,
+    partialFilterExpression={"userId": {"$exists": True}}
+)
+
