@@ -97,8 +97,8 @@ function RedirectToHome() {
         if (error.response?.status === 404) {
           setTargetRoute("/complete-profile");
         } else {
-          // Fallback to checking Clerk metadata
-          const userRole = user?.publicMetadata?.role || user?.unsafeMetadata?.role;
+          // Fallback to checking Clerk metadata (only publicMetadata for security)
+          const userRole = user?.publicMetadata?.role;
           if (userRole === "teacher") {
             setTargetRoute("/dashboard");
           } else if (userRole === "student") {

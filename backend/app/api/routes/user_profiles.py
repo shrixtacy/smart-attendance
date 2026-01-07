@@ -19,7 +19,7 @@ async def create_user_profile(payload: UserProfileCreate):
     
     # Validate required fields based on role
     if payload.role == "student":
-        if not payload.admission_year or not payload.class_semester or not payload.roll_number:
+        if payload.admission_year is None or not payload.class_semester or not payload.roll_number:
             raise HTTPException(
                 status_code=400,
                 detail="Students must provide admission_year, class_semester, and roll_number"
@@ -52,7 +52,7 @@ async def create_user_profile(payload: UserProfileCreate):
         profile_doc["roll_number"] = payload.roll_number
     elif payload.role == "teacher":
         profile_doc["designation"] = payload.designation
-        profile_doc["assigned_classes"] = payload.assigned_classes or []
+        profile_doc["assigned_classes"] = payload.assigned_classes
     
     # Insert into database
     try:

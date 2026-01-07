@@ -48,7 +48,7 @@ export default function CompleteProfile() {
           setLoading(false);
           return;
         }
-        profileData.admission_year = parseInt(admissionYear);
+        profileData.admission_year = parseInt(admissionYear, 10);
         profileData.class_semester = classSemester;
         profileData.roll_number = rollNumber;
       } else if (role === "teacher") {
@@ -58,7 +58,9 @@ export default function CompleteProfile() {
           return;
         }
         profileData.designation = designation;
-        profileData.assigned_classes = assignedClasses.split(",").map(c => c.trim()).filter(c => c);
+        profileData.assigned_classes = assignedClasses 
+          ? assignedClasses.split(",").map(c => c.trim()).filter(c => c) 
+          : [];
       }
 
       // Create user profile
