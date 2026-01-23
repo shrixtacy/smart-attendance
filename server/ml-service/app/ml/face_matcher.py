@@ -1,12 +1,6 @@
-import numpy as np 
+import numpy as np
 
-def euclidean_distance(a, b):
-    return np.linalg.norm(np.array(a) - np.array(b))
-
-def match_embedding(detected_emb, known_embeddings):
-    """
-    known_embeddings: list of embeddings for ONE student
-    Returns: best_distance (float)
-    """
-    distances = [euclidean_distance(detected_emb, e) for e in known_embeddings]
-    return min(distances) if distances else None
+def cosine_similarity(a, b):
+    a = np.array(a)
+    b = np.array(b)
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))

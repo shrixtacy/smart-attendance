@@ -1,46 +1,34 @@
-import face_recognition
+import cv2
+import mediapipe as mp
 import numpy as np
-from PIL import Image
-from io import BytesIO
 
 MIN_FACE_AREA_RATIO = 0.04
 NUM_JITTERS = 3
 
-def detect_faces_and_embeddings(image_bytes: bytes):
-  
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
-    image_np = np.array(image)
-    
-    h, w, _ = image_np.shape
-    image_area = h * w
+mp_face = mp.solutions.face_detection
+_detector = mp_face.FaceDetection(
+  model_selection = 0,
+  min_detection_confidence = 0.6
+)
 
-    locations = face_recognition.face_locations(
-      image_np,
-      number_of_times_to_upsample=1,
-      model="hog"   # CPU-friendly, works in Docker
-    )
+def detect_faces(image: np.ndarray):
+  
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    result = _detector.process(rgb)
     
-    if not locations:
+    if not result.detections:
       return []
     
-
-    encodings = face_recognition.face_encodings(
-      image_np, 
-      locations,
-      num_jitters= NUM_JITTERS,
-      model="small" 
-    )
-
+    h, w, _ = image.shape
     faces = []
-    
-    for (top, right, bottom, left), enc in zip(locations, encodings):
-      face_area = (bottom-left) * (right - top)
-      if face_area / image_area < MIN_FACE_AREA_RATIO:
-        continue
+
+    for det in result.detections:
+      box = det.location_data.relative_bounding_box
+      x1 = int(box.xmin * w)
+      y1 = int(box.ymin * h)
+      x2 = x1 + int(box.width * w)
+      y2 = y1 + int(box.height * h)
       
-      faces.append({
-          "box": (top, right, bottom, left),
-          "embedding": enc.tolist()
-        })
+      faces.append((y1,x2,y2,x1))
       
     return faces
