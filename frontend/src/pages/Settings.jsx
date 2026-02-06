@@ -392,7 +392,7 @@ export default function Settings() {
                   </div>
                   <div className="flex-1">
                     <h4 className="text-lg font-bold text-slate-800">{profile.name || "-"}</h4>
-                    <p className="text-sm text-slate-500">{profile.role.charAt(0).toUpperCase()+profile.role.slice(1).toLowerCase() || "Department of Science"}</p>
+                    <p className="text-sm text-slate-500">{profile.role.charAt(0).toUpperCase()+profile.role.slice(1) || "Department of Science"}</p>
                   </div>
                   <label className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-gray-50 transition shadow-sm cursor-pointer">
                     <Upload size={16} />
@@ -413,7 +413,7 @@ export default function Settings() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">Role</label>
-                    <input type="text" value={profile.role.charAt(0).toUpperCase()+profile.role.slice(1).toLowerCase()} onChange={(e) => setProfile(prev => ({ ...prev, role: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" />
+                    <input type="text" value={profile.role.charAt(0).toUpperCase()+profile.role.slice(1)} onChange={(e) => setProfile(prev => ({ ...prev, role: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-slate-700">Email Address</label>
