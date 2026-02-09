@@ -1303,7 +1303,9 @@ A: Yes, we use industry-standard security practices. See the [Security](#-securi
 
 ### Main Contributors
 
-- **nem-web** - *Project Creator & Lead Developer* - [GitHub](https://github.com/nem-web)
+- **Nemchand** - *Project Creator & Lead Developer* - [GitHub](https://github.com/nem-web)
+- **Suvam Paul** - *Project Maintainer & Mentor* - [GitHub](https://github.com/Suvam-paul145)
+- **Aditya Dattatreya** - *Project Maintainer & Mentor* - [GitHub](https://github.com/adi271001)
 
 ### Contributors
 
