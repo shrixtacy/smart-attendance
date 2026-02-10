@@ -19,6 +19,11 @@ import StudentProfile from "./students/pages/StudentProfile.jsx"
 import OAuthCallback from "./pages/OAuthCallback.jsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 
+/**
+ * Redirects the user to the appropriate home page based on their role.
+ *
+ * @returns {React.ReactElement} A Navigate element to the correct route.
+ */
 function RedirectToHome() {
   const storedUser = localStorage.getItem("user");
   const user = storedUser ?  JSON.parse(storedUser) : null;
@@ -41,18 +46,17 @@ const hideNavbarRoutes = [
   "/register"
 ];
 
+/**
+ * Root application component that manages routing and theme.
+ *
+ * @returns {React.ReactElement} The rendered application.
+ */
 export default function App() {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
 
   const hideNavbar = hideNavbarRoutes.includes(location.pathname);
 
-  const toggleMenu = () => {
-  setIsOpen(!isOpen);
-};
-const handleThemeToggle = () => {
-  setTheme(theme === "dark" ? "light" : "dark");
-};
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       {!hideNavbar && <Header theme={theme} setTheme={setTheme} />}
