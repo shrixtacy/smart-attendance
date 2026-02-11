@@ -1,6 +1,4 @@
 import logging
-import smtplib
-from email.message import EmailMessage
 
 import httpx
 
@@ -13,44 +11,27 @@ BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 
 class BrevoEmailService:
     @staticmethod
-    async def send_verification_email(to_email:str,user:str,verification_link:str):
-        payload={
-            "sender":{
-                "email":brevo_settings.BREVO_SENDER_EMAIL,
-                "name":brevo_settings.BREVO_SENDER_NAME,
+    async def send_verification_email(to_email: str, user: str, verification_link: str):
+        payload = {
+            "sender": {
+                "email": brevo_settings.BREVO_SENDER_EMAIL,
+                "name": brevo_settings.BREVO_SENDER_NAME,
             },
-            "to":[
-                {"email":to_email}
-            ],
+            "to": [{"email": to_email}],
             "subject": "Verify your email for Smart Attendance",
-            "htmlContent":verification_email_template(verification_link,user),
+            "htmlContent": verification_email_template(verification_link, user),
         }
-    
+
         headers = {
-        "api-key": brevo_settings.BREVO_API_KEY,
-        "content-type": "application/json"
+            "api-key": brevo_settings.BREVO_API_KEY,
+            "content-type": "application/json",
         }
         async with httpx.AsyncClient(timeout=20.0) as client:
             try:
-                response=await client.post(BREVO_URL,json=payload,headers=headers)
+                response = await client.post(BREVO_URL, json=payload, headers=headers)
                 response.raise_for_status()
             except httpx.HTTPError as e:
                 logger.warning("Failed to send email: %s", e)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # def send_verification_email(to_email: str, verification_link: str):

@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
-from .core.config import APP_NAME, ORIGINS
+from .core.config import APP_NAME
 
 # Routes
 from .api.routes.auth import router as auth_router
@@ -17,9 +17,10 @@ from .api.routes.students import router as students_router
 from .api.routes.attendance import router as attendance_router
 
 from app.api.routes import teacher_settings as settings_router
-from app.core.cloudinary_config import cloudinary
 from app.services.ml_client import ml_client
-from app.services.attendance_daily import ensure_indexes as ensure_attendance_daily_indexes
+from app.services.attendance_daily import (
+    ensure_indexes as ensure_attendance_daily_indexes,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,7 +35,9 @@ async def lifespan(app: FastAPI):
         await ensure_attendance_daily_indexes()
         logger.info("attendance_daily indexes ensured")
     except Exception as e:
-        logger.warning(f"Could not connect to MongoDB. Application will continue, but DB features will fail. Error: {e}")
+        logger.warning(
+            f"Could not connect to MongoDB. Application will continue, but DB features will fail. Error: {e}"
+        )
         logger.warning("Please check your MONGO_URI in .env")
 
     yield
@@ -57,7 +60,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
 
     # SessionMiddleware MUST be added before routers so authlib can use request.session reliably
     app.add_middleware(

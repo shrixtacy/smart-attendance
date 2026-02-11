@@ -1,5 +1,7 @@
 import html
-def verification_email_template(verification_link: str,user:str) -> str:
+
+
+def verification_email_template(verification_link: str, user: str) -> str:
     safe_user = html.escape(user)
     return f"""
     <html>
