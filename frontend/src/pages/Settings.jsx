@@ -18,9 +18,6 @@ import {
   Trash2,
   Share2,
   Sparkles,
-  Code,
-  Palette,
-  Aperture,
   TreePine,
 } from "lucide-react";
 import SettingsSidebar from "../components/SettingsSidebar";
@@ -58,6 +55,25 @@ export default function Settings() {
 
   // State for email preff
   const [emailPreferences, setEmailPreferences] = useState(false);
+
+  // Contributors state
+  const [contributors, setContributors] = useState([]);
+  const [loadingContributors, setLoadingContributors] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "Credits") {
+      setLoadingContributors(true);
+      fetch("https://api.github.com/repos/udaykiran243/smart-attendance/contributors")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setContributors(data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch contributors:", err))
+        .finally(() => setLoadingContributors(false));
+    }
+  }, [activeTab]);
 
   // --- helper functions (inside your component) ---
   const [saving, setSaving] = useState(false);
@@ -830,159 +846,72 @@ export default function Settings() {
                   <div>
                     <div className="flex items-center gap-3">
                       <h3 className="text-xl font-bold text-slate-800">
-                        Shoutout to our developers
+                        Our Contributors
                       </h3>
                       <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">
-                        Built with care
+                        Open Source
                       </span>
                     </div>
                     <p className="text-sm text-slate-500 mt-1">
-                      A small thank you page to celebrate the team behind the
-                      Smart Face Recognition Attendance System.
+                      The amazing people who have contributed code to this
+                      project.
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-white border border-gray-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2 shadow-sm transition cursor-pointer">
-                      <Share2 size={16} /> Share appreciation
-                    </button>
                     <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition cursor-pointer">
                       <Sparkles size={16} /> Send thanks
                     </button>
                   </div>
                 </div>
 
-                {/* Highlight Card */}
-                <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex flex-col md:flex-row items-start md:items-center gap-6 shadow-sm">
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                    <Sparkles size={32} />
+                {loadingContributors ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-slate-800 mb-1">
-                      To the developers who made smart attendance possible
-                    </h4>
-                    <p className="text-sm text-slate-600 leading-relaxed mb-3">
-                      From camera calibration to face-matching accuracy, every
-                      detail in this system exists because of your patience,
-                      late nights, and clean commits.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">
-                        Reliable sessions
-                      </span>
-                      <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">
-                        Secure data
-                      </span>
-                      <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">
-                        Smoother classes
-                      </span>
-                    </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {contributors.map((contributor) => (
+                      <div
+                        key={contributor.id}
+                        className="p-5 border border-gray-100 rounded-xl hover:shadow-lg transition-all bg-white group flex items-center gap-4"
+                      >
+                        <img
+                          src={contributor.avatar_url}
+                          alt={contributor.login}
+                          className="w-14 h-14 rounded-full border-2 border-gray-100 group-hover:border-indigo-100 transition-colors"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-gray-900 truncate">
+                            {contributor.login}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-medium px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">
+                              {contributor.contributions} commits
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={contributor.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        >
+                          <Share2 size={18} />
+                        </a>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
 
-                {/* Team Grid */}
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">
-                    Core development team
-                  </h4>
-                  <p className="text-sm text-slate-500 mb-4">
-                    The humans behind the code, models, and UI that keep
-                    attendance running smoothly.
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Card 1 */}
-                    <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                          PV
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800">
-                            Priya Verma
-                          </div>
-                          <div className="text-xs text-indigo-600 font-medium">
-                            Backend & APIs
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mb-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1">
-                          <Code size={10} /> Session engine
-                        </span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">
-                          Scalability
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 italic border-l-2 border-indigo-100 pl-2">
-                        "If attendance is instant and reliable, the backend is
-                        quietly doing its job."
-                      </p>
-                    </div>
-
-                    {/* Card 2 */}
-                    <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                          AM
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800">
-                            Arjun Mehta
-                          </div>
-                          <div className="text-xs text-emerald-600 font-medium">
-                            Face recognition
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mb-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1">
-                          <Aperture size={10} /> ML models
-                        </span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">
-                          Camera tuning
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 italic border-l-2 border-emerald-100 pl-2">
-                        "Your best attendance photo is the one our models never
-                        fail to recognise."
-                      </p>
-                    </div>
-
-                    {/* Card 3 */}
-                    <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">
-                          SK
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-800">
-                            Sara Khan
-                          </div>
-                          <div className="text-xs text-rose-500 font-medium">
-                            UI & UX
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mb-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1">
-                          <Palette size={10} /> Teacher portal
-                        </span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">
-                          Student app
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500 italic border-l-2 border-rose-100 pl-2">
-                        "Simple layouts, clear states, and fewer taps for
-                        already-busy teachers."
-                      </p>
-                    </div>
+                {contributors.length === 0 && !loadingContributors && (
+                  <div className="text-center text-gray-500 py-10">
+                    No contributors found.
                   </div>
-                </div>
+                )}
 
-                <div className="text-center text-xs text-gray-400 mt-8 pt-8 border-t border-gray-50">
-                  Thank you to every developer, designer, and tester who helped
-                  turn the Smart Face Recognition Attendance System from an idea
-                  into something teachers and students can use every day.
+                <div className="text-center text-xs text-gray-400 mt-12 pt-8 border-t border-gray-50">
+                  Thank you to every developer who helped build the Smart
+                  Attendance System.
                 </div>
               </div>
             )}

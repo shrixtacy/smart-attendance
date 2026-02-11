@@ -5,6 +5,7 @@ import numpy as np
 MIN_FACE_AREA_RATIO = 0.04
 NUM_JITTERS = 3
 
+# Simple standard use of mediapipe
 mp_face = mp.solutions.face_detection
 _detector = mp_face.FaceDetection(
     model_selection=0,
