@@ -23,6 +23,9 @@ jobs:
           pip install -r server/backend-api/requirements.txt
 
       - name: Run Backend Tests
+        env:
+          MONGO_URI: mongodb://localhost:27017
+          JWT_SECRET: test_secret
         run: |
           cd server/backend-api
           pytest
@@ -47,4 +50,6 @@ jobs:
         run: npm ci
 
       - name: Run Frontend Tests
+        env:
+          VITE_ML_SERVICE_URL: http://localhost:8000
         run: npm test
