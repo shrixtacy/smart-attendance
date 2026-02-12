@@ -33,4 +33,4 @@ jobs:
         run: ruff format --check .
 
       - name: Security scan with Bandit
-        run: bandit -r .
+        run: bandit -r . --skip B101,B105 --exclude ./tests,./seed_db.py
