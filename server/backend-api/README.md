@@ -53,11 +53,10 @@ Frontend → Backend API → ML Service
 - `POST /mark` - Mark attendance with classroom photo
 - `POST /confirm` - Confirm attendance after review
 
-### Teacher Settings & Schedule (`/settings`)
-- `GET /settings` – Get teacher profile, settings, and schedule
-- `PATCH /settings` – Partially update teacher settings
-- `PUT /settings` – Update teacher settings including full schedule
-
+### Teacher Settings & Schedule (`/api/settings`)
+- `GET /api/settings` – Get teacher profile, settings, and schedule
+- `PATCH /api/settings` – Partially update teacher settings
+- `PUT /api/settings` – Update teacher settings including full schedule
 
 ## Local Development
 
