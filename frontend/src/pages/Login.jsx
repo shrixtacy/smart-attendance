@@ -75,14 +75,10 @@ export default function Login() {
             </div>
 
             {/* Social Login Buttons */}
-            <div className="flex gap-4">
-              <button onClick={googleLogin} className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+            <div className="w-full">
+              <button onClick={googleLogin} className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
                 <span className="text-sm font-medium text-gray-700">Google</span>
-              </button>
-              <button className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
-                <img src="https://www.svgrepo.com/show/475689/twitter-color.svg" alt="Twitter" className="w-5 h-5" />
-                <span className="text-sm font-medium text-gray-700">Twitter</span>
               </button>
             </div>
 
