@@ -132,7 +132,7 @@ async def get_my_subjects(current_user: dict = Depends(get_current_user)):
 
     # 2. Fetch all subjects in one query
     subjects_cursor = db.subjects.find({"_id": {"$in": subject_ids}})
-    
+
     results = []
     async for sub in subjects_cursor:
         # 3. Find this student in the subject's student list
@@ -144,20 +144,24 @@ async def get_my_subjects(current_user: dict = Depends(get_current_user)):
             ),
             None,
         )
-        
-        attendance_data = student_data.get("attendance", {}) if student_data else {
-            "present": 0, "absent": 0, "total": 0, "percentage": 0
-        }
 
-        results.append({
-            "id": str(sub["_id"]),
-            "name": sub["name"],
-            "code": sub.get("code"),
-            "type": sub.get("type", "Core"), 
-            "attendance": attendance_data.get("percentage", 0),
-            "attended": attendance_data.get("present", 0),
-            "total": attendance_data.get("total", 0),
-        })
+        attendance_data = (
+            student_data.get("attendance", {})
+            if student_data
+            else {"present": 0, "absent": 0, "total": 0, "percentage": 0}
+        )
+
+        results.append(
+            {
+                "id": str(sub["_id"]),
+                "name": sub["name"],
+                "code": sub.get("code"),
+                "type": sub.get("type", "Core"),
+                "attendance": attendance_data.get("percentage", 0),
+                "attended": attendance_data.get("present", 0),
+                "total": attendance_data.get("total", 0),
+            }
+        )
 
     return results
 

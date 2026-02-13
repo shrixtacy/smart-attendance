@@ -209,7 +209,9 @@ async def verify_email(token: str = Query(...)):
         },
     )
 
-    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip(
+        "/"
+    )
     return RedirectResponse(url=f"{FRONTEND_BASE_URL}/login?verified=true")
 
 
@@ -227,7 +229,7 @@ async def google_login(request: Request):
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI")
     logger.info(f"Initiating Google Login. Redirect URI: {redirect_uri}")
     if not redirect_uri:
-         logger.error("GOOGLE_REDIRECT_URI is not set in environment!")
+        logger.error("GOOGLE_REDIRECT_URI is not set in environment!")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
@@ -267,8 +269,8 @@ async def google_callback(request: Request):
             {"_id": user["_id"]},
             {
                 "$set": {"is_verified": True},
-                "$unset": {"verification_token": "", "verification_expiry": ""}
-            }
+                "$unset": {"verification_token": "", "verification_expiry": ""},
+            },
         )
         logger.info(f"User auto-verified via Google Login: {email}")
         user["is_verified"] = True
