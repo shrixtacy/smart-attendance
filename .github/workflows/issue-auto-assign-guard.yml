@@ -1,0 +1,86 @@
+name: Issue Auto Assignment Guard
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  assignment-guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Handle assignment request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = context.payload.comment.body.toLowerCase();
+            const author = context.payload.comment.user.login;
+            const issue = context.payload.issue;
+
+            // Keywords that indicate assignment request
+            const assignKeywords = ["assign me", "i want to work", "please assign", "can i take this"];
+
+            if (!assignKeywords.some(k => comment.includes(k))) {
+              return;
+            }
+
+            // Skip if issue already assigned
+            if (issue.assignees.length > 0) {
+              return;
+            }
+
+            // Fetch all open issues assigned to this user
+            const { data: assignedIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              assignee: author,
+            });
+
+            // Fetch open PRs by this user
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+            });
+
+            const hasOpenPR = prs.some(pr => pr.user.login === author);
+
+            if (assignedIssues.length > 0 && !hasOpenPR) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `
+              👋 @${author}
+              
+              You already have an assigned issue.
+              
+              Please complete it first before taking a new one 🙏  
+              If you have already raised a PR for it, **share the PR link here**, and we’ll assign you.
+              
+              Thanks for contributing 🚀
+                              `,
+                            });
+                            return;
+                          }
+              
+                          // Assign issue
+                          await github.rest.issues.addAssignees({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            issue_number: issue.number,
+                            assignees: [author],
+                          });
+              
+                          await github.rest.issues.createComment({
+                            owner: context.repo.owner,
+                            repo: context.repo.repo,
+                            issue_number: issue.number,
+                            body: `
+              ✅ Assigning this issue to @${author}
+
+            All the best!  
+            Feel free to ask questions if needed 🚀
+                          `,
+                        });
