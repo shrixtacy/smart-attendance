@@ -262,8 +262,7 @@ export default function ForgotPassword() {
           {error && (
             <p
               role="alert"
-              aria-live="polite"
-              className="text-sm font-medium text-[var(--text-main)]"
+              className="text-sm font-medium text-[var(--text-main)] border-l-4 border-[var(--primary)] pl-3"
             >
               {error}
             </p>
