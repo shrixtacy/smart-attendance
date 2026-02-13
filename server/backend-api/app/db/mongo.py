@@ -1,8 +1,9 @@
+import os
 import motor.motor_asyncio
 from app.core.config import settings
 
 MONGO_URI = settings.MONGO_URI
-MONGO_DB = "smart-attendance"
+MONGO_DB = os.getenv("MONGO_DB_NAME", "smart-attendance")
 
 
 client = motor.motor_asyncio.AsyncIOMotorClient(

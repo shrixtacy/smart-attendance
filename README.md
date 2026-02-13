@@ -39,6 +39,7 @@ Smart Attendance is a modern, intelligent attendance management system designed 
   - [Backend Setup](#backend-setup)
   - [Frontend Setup](#frontend-setup)
   - [Environment Variables](#environment-variables)
+- [Running Tests](#-running-tests)
 - [Usage](#-usage)
   - [For Teachers](#for-teachers)
   - [For Students](#for-students)
@@ -397,6 +398,48 @@ BACKEND_API_URL=http://localhost:8000
 # Model Configuration (if needed)
 # Add any ML model specific configurations here
 ```
+
+---
+
+## 🧪 Running Tests
+
+We maintain a comprehensive testing suite covering Backend, ML Service, and Frontend.
+
+### Backend Tests (Pytest)
+Ensure MongoDB is running locally or set `MONGO_URI`.
+```bash
+cd server/backend-api
+pip install -r requirements.txt
+pytest --cov=app --cov-report=term-missing
+```
+
+### ML Service Tests (Pytest)
+```bash
+cd server/ml-service
+pip install -r requirements.txt
+pytest --cov=app --cov-report=term-missing
+```
+
+### Frontend Tests (Vitest)
+```bash
+cd frontend
+npm install
+npm test
+# For coverage
+npm run test:coverage
+```
+
+### End-to-End Tests (Playwright)
+Requires all services (Backend, ML, Frontend) to be running.
+```bash
+cd frontend
+npx playwright install
+npx playwright test
+```
+
+For more details, see [TESTING.md](TESTING.md).
+
+---
 
 #### Important Notes:
 
