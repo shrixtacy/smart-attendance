@@ -69,7 +69,7 @@ async def patch_settings_route(
         raise HTTPException(status_code=400, detail="Invalid payload")
 
     user_id = validate_object_id(current["id"])
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
 
     # Extract fields that need to sync across collections
     user_updates = {}
