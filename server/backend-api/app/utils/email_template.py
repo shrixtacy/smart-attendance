@@ -1,9 +1,5 @@
 import html
 
-
-import html
-
-
 def otp_email_template(otp: str, user: str) -> str:
     """
     Generate HTML body for password reset OTP email.
