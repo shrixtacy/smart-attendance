@@ -573,7 +573,7 @@ export default function Settings() {
                       className="flex-shrink-0 mt-0.5 opacity-90"
                       size={20}
                     />
-                    <p className="text-sm leading-relaxed text-[var(--text-on-primary)]/90 font-medium">
+                    <p className="text-sm leading-relaxed text-[var(--text-main)]/90 font-medium">
                       Adjusting these values will update visual alerts across
                       dashboards, student profiles and reports.
                     </p>
@@ -614,7 +614,7 @@ export default function Settings() {
                 </div>
 
                 <div className="flex items-center gap-6 p-6 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
-                  <div className="w-20 h-20 bg-[var(--bg-hover)] rounded-full flex items-center justify-center text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-white shadow-sm overflow-hidden">
+                  <div className="w-20 h-20 bg-[var(--bg-hover)] rounded-full flex items-center justify-center text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden">
                     {profile.avatarUrl ? (
                       <img
                         src={profile.avatarUrl}

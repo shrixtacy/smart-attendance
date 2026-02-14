@@ -152,7 +152,7 @@ export default function Login() {
                 <p className="text-[var(--danger)] text-sm font-medium text-center">{error}</p>
               )}
 
-              <button className="w-full py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] shadow-md transition-all active:scale-[0.98]">
+              <button className="w-full py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] hover:text-[var(--text-main)] shadow-md transition-all active:scale-[0.98]">
                 Sign in
               </button>
             </form>

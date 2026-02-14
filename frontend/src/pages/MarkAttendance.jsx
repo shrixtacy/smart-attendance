@@ -366,7 +366,7 @@ export default function MarkAttendance() {
               <button disabled={attendanceSubmitted} onClick={handleConfirmAttendance} className={`w-full py-3 rounded-xl font-semibold shadow-md transition flex items-center justify-center gap-2
                 ${
                   attendanceSubmitted
-                    ? "bg-[var(--text-body)]/20 cursor-not-allowed text-[var(--text-on-primary)]"
+                    ? "bg-[var(--bg-secondary)] cursor-not-allowed text-[var(--text-body)]"
                     : "bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-[var(--text-on-primary)]"
                 }
               `}>
