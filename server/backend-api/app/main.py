@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
     yield
     await ml_client.close()
     logger.info("ML client closed")
+    await close_redis()
 
 
 def create_app() -> FastAPI:
