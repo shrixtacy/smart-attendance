@@ -102,3 +102,47 @@ async def auth_token(client, db, test_user_data):
     }
     response = await client.post("/auth/login", json=login_data)
     return response.json()["token"]
+
+
+@pytest.fixture
+def teacher_token_header():
+    """
+    Fixture to create JWT token headers for teacher authentication in tests.
+    """
+    from jose import jwt
+    from app.core.config import settings
+
+    def _create_header(teacher_id: str):
+        token_payload = {
+            "sub": teacher_id,
+            "role": "teacher",
+            "email": "teacher@test.com",
+        }
+        token = jwt.encode(
+            token_payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    return _create_header
+
+
+@pytest.fixture
+def student_token_header():
+    """
+    Fixture to create JWT token headers for student authentication in tests.
+    """
+    from jose import jwt
+    from app.core.config import settings
+
+    def _create_header(student_id: str):
+        token_payload = {
+            "sub": student_id,
+            "role": "student",
+            "email": "student@test.com",
+        }
+        token = jwt.encode(
+            token_payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    return _create_header

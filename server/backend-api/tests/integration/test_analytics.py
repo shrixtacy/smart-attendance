@@ -320,3 +320,203 @@ async def test_class_risk_empty(client: AsyncClient, db):
 
     assert "data" in data
     assert len(data["data"]) == 0  # No classes at risk
+
+
+@pytest.mark.asyncio
+async def test_global_stats(client: AsyncClient, db, teacher_token_header):
+    """Test GET /api/analytics/global endpoint"""
+    # Get teacher ID from the token header
+    # For this test, we'll use a mock teacher ID
+    teacher_id = ObjectId()
+
+    # Create subjects for the teacher
+    subject1_id = ObjectId()
+    subject2_id = ObjectId()
+    subject3_id = ObjectId()
+
+    await db.subjects.insert_many(
+        [
+            {
+                "_id": subject1_id,
+                "name": "Computer Science",
+                "code": "CS101",
+                "professor_ids": [teacher_id],
+            },
+            {
+                "_id": subject2_id,
+                "name": "Mathematics",
+                "code": "MATH101",
+                "professor_ids": [teacher_id],
+            },
+            {
+                "_id": subject3_id,
+                "name": "Physics",
+                "code": "PHY101",
+                "professor_ids": [teacher_id],
+            },
+        ]
+    )
+
+    # Create attendance records for each subject
+    # Subject 1: High attendance (85%)
+    await db.attendance_daily.insert_many(
+        [
+            {
+                "classId": subject1_id,
+                "subjectId": subject1_id,
+                "teacherId": teacher_id,
+                "date": "2024-01-15",
+                "summary": {
+                    "present": 22,
+                    "absent": 4,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 84.62,
+                },
+            },
+            {
+                "classId": subject1_id,
+                "subjectId": subject1_id,
+                "teacherId": teacher_id,
+                "date": "2024-01-16",
+                "summary": {
+                    "present": 23,
+                    "absent": 3,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 88.46,
+                },
+            },
+        ]
+    )
+
+    # Subject 2: Medium attendance (70% - at risk)
+    await db.attendance_daily.insert_one(
+        {
+            "classId": subject2_id,
+            "subjectId": subject2_id,
+            "teacherId": teacher_id,
+            "date": "2024-01-15",
+            "summary": {
+                "present": 18,
+                "absent": 8,
+                "late": 0,
+                "total": 26,
+                "percentage": 69.23,
+            },
+        }
+    )
+
+    # Subject 3: High attendance (90%)
+    await db.attendance_daily.insert_one(
+        {
+            "classId": subject3_id,
+            "subjectId": subject3_id,
+            "teacherId": teacher_id,
+            "date": "2024-01-15",
+            "summary": {
+                "present": 24,
+                "absent": 2,
+                "late": 0,
+                "total": 26,
+                "percentage": 92.31,
+            },
+        }
+    )
+
+    # Test the endpoint
+    response = await client.get(
+        "/api/analytics/global", headers=teacher_token_header(str(teacher_id))
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Verify response structure
+    assert "overall_attendance" in data
+    assert "risk_count" in data
+    assert "top_subjects" in data
+
+    # Verify calculations
+    # Subject 1 avg: (22+23)/(26+26) * 100 = 45/52 * 100 = 86.54%
+    # Subject 2 avg: 18/26 * 100 = 69.23%
+    # Subject 3 avg: 24/26 * 100 = 92.31%
+    # Overall avg: (86.54 + 69.23 + 92.31) / 3 = 82.69%
+    assert data["overall_attendance"] > 80
+    assert data["overall_attendance"] < 85
+
+    # Risk count: subjects with < 75% (only Subject 2)
+    assert data["risk_count"] == 1
+
+    # Top subjects should be sorted by percentage (descending)
+    assert len(data["top_subjects"]) == 3
+    assert data["top_subjects"][0]["attendancePercentage"] >= data["top_subjects"][1][
+        "attendancePercentage"
+    ]
+    assert data["top_subjects"][1]["attendancePercentage"] >= data["top_subjects"][2][
+        "attendancePercentage"
+    ]
+
+    # Verify subject details
+    assert data["top_subjects"][0]["subjectName"] == "Physics"
+    assert data["top_subjects"][0]["attendancePercentage"] == 92.31
+
+
+@pytest.mark.asyncio
+async def test_global_stats_no_subjects(client: AsyncClient, db, teacher_token_header):
+    """Test global stats when teacher has no subjects"""
+    teacher_id = ObjectId()
+
+    response = await client.get(
+        "/api/analytics/global", headers=teacher_token_header(str(teacher_id))
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["overall_attendance"] == 0.0
+    assert data["risk_count"] == 0
+    assert data["top_subjects"] == []
+
+
+@pytest.mark.asyncio
+async def test_global_stats_no_attendance_data(
+    client: AsyncClient, db, teacher_token_header
+):
+    """Test global stats when subjects have no attendance records"""
+    teacher_id = ObjectId()
+    subject_id = ObjectId()
+
+    await db.subjects.insert_one(
+        {
+            "_id": subject_id,
+            "name": "Computer Science",
+            "code": "CS101",
+            "professor_ids": [teacher_id],
+        }
+    )
+
+    response = await client.get(
+        "/api/analytics/global", headers=teacher_token_header(str(teacher_id))
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    # Should return empty stats when no attendance data exists
+    assert data["overall_attendance"] == 0.0
+    assert data["risk_count"] == 0
+    assert data["top_subjects"] == []
+
+
+@pytest.mark.asyncio
+async def test_global_stats_non_teacher(client: AsyncClient, db, student_token_header):
+    """Test that non-teachers cannot access global stats"""
+    student_id = ObjectId()
+
+    response = await client.get(
+        "/api/analytics/global", headers=student_token_header(str(student_id))
+    )
+
+    assert response.status_code == 403
+    assert "Only teachers" in response.json()["detail"]

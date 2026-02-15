@@ -36,12 +36,14 @@ Frontend → Backend API → ML Service
 ## API Endpoints
 
 ### Authentication (`/api/auth`)
+
 - `POST /login` - User login
 - `POST /register` - User registration
 - `POST /logout` - User logout
 - `GET /me` - Get current user
 
 ### Students (`/api/students`)
+
 - `GET /` - List students
 - `POST /` - Create student
 - `GET /{id}` - Get student details
@@ -50,10 +52,12 @@ Frontend → Backend API → ML Service
 - `POST /upload-face` - Upload student face image
 
 ### Attendance (`/api/attendance`)
+
 - `POST /mark` - Mark attendance with classroom photo
 - `POST /confirm` - Confirm attendance after review
 
 ### Analytics (`/api/analytics`)
+
 - `GET /attendance-trend` - Get attendance trend for a class over time
   - Query params: `classId`, `dateFrom`, `dateTo`
 - `GET /monthly-summary` - Get monthly attendance summary
@@ -61,6 +65,7 @@ Frontend → Backend API → ML Service
 - `GET /class-risk` - Get classes with low attendance (<75%)
 
 ### Teacher Settings & Schedule (`/api/settings`)
+
 - `GET /api/settings` – Get teacher profile, settings, and schedule
 - `PATCH /api/settings` – Partially update teacher settings
 - `PUT /api/settings` – Update teacher settings including full schedule
@@ -136,17 +141,20 @@ docker-compose up backend-api
 See `.env.example` for all configuration options.
 
 **Required Variables:**
+
 - `MONGO_URI`: MongoDB connection string
 - `JWT_SECRET`: Secret key for JWT tokens
 - `CLOUDINARY_*`: Cloudinary credentials
 - `SMTP_*`: Email server configuration
 
 **ML Service Configuration:**
+
 - `ML_SERVICE_URL`: ML service endpoint (default: http://localhost:8001)
 - `ML_SERVICE_TIMEOUT`: Request timeout in seconds (default: 30)
 - `ML_SERVICE_MAX_RETRIES`: Number of retry attempts (default: 3)
 
 **ML Thresholds:**
+
 - `ML_CONFIDENT_THRESHOLD`: Distance threshold for confident match (default: 0.50)
 - `ML_UNCERTAIN_THRESHOLD`: Distance threshold for uncertain match (default: 0.60)
 
@@ -181,6 +189,7 @@ result = await ml_client.batch_match(
 ### Error Handling
 
 The ML client includes:
+
 - Automatic retry with exponential backoff
 - Timeout handling
 - Connection pooling
@@ -189,6 +198,7 @@ The ML client includes:
 ### Circuit Breaker Pattern
 
 If ML service is unavailable:
+
 1. Request fails after max retries
 2. Error is logged
 3. User-friendly error returned
@@ -197,6 +207,7 @@ If ML service is unavailable:
 ## Database Schema
 
 ### Users Collection
+
 ```javascript
 {
   _id: ObjectId,
@@ -210,6 +221,7 @@ If ML service is unavailable:
 ```
 
 ### Students Collection
+
 ```javascript
 {
   _id: ObjectId,
@@ -223,6 +235,7 @@ If ML service is unavailable:
 ```
 
 ### Subjects Collection
+
 ```javascript
 {
   _id: ObjectId,
@@ -244,6 +257,7 @@ If ML service is unavailable:
 ```
 
 ### Attendance Daily Collection
+
 ```javascript
 {
   _id: ObjectId,
@@ -265,6 +279,7 @@ If ML service is unavailable:
 ## API Documentation
 
 Interactive API docs available at:
+
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
@@ -281,6 +296,7 @@ GET /api/analytics/attendance-trend?classId={classId}&dateFrom=2024-01-01&dateTo
 ```
 
 **Response:**
+
 ```json
 {
   "classId": "507f1f77bcf86cd799439011",
@@ -308,6 +324,7 @@ GET /api/analytics/monthly-summary?classId={classId}
 ```
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -334,6 +351,7 @@ GET /api/analytics/class-risk
 ```
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -351,6 +369,52 @@ GET /api/analytics/class-risk
   ]
 }
 ```
+
+#### Global Stats
+
+Get aggregated statistics for the logged-in teacher (requires authentication):
+
+```bash
+GET /api/analytics/global
+Authorization: Bearer {token}
+```
+
+**Response:**
+
+```json
+{
+  "overall_attendance": 82.35,
+  "risk_count": 2,
+  "top_subjects": [
+    {
+      "subjectId": "507f1f77bcf86cd799439011",
+      "subjectName": "Computer Science",
+      "subjectCode": "CS101",
+      "attendancePercentage": 88.5,
+      "totalPresent": 442,
+      "totalAbsent": 58,
+      "totalLate": 0,
+      "totalStudents": 500
+    },
+    {
+      "subjectId": "507f1f77bcf86cd799439012",
+      "subjectName": "Mathematics",
+      "subjectCode": "MATH101",
+      "attendancePercentage": 72.3,
+      "totalPresent": 361,
+      "totalAbsent": 138,
+      "totalLate": 1,
+      "totalStudents": 500
+    }
+  ]
+}
+```
+
+**Fields:**
+
+- `overall_attendance`: Average attendance percentage across all teacher's subjects
+- `risk_count`: Number of subjects with attendance below 75%
+- `top_subjects`: List of all subjects sorted by attendance percentage (descending)
 
 ## Testing
 
@@ -481,6 +545,7 @@ Structured logging with request correlation:
 ### Scaling
 
 **Horizontal Scaling:**
+
 ```yaml
 backend-api:
   deploy:
@@ -490,6 +555,7 @@ backend-api:
 ```
 
 **Load Balancing:**
+
 - Use Nginx or AWS ALB
 - Sticky sessions for authenticated users
 - Health check on root endpoint
@@ -497,18 +563,21 @@ backend-api:
 ### Cloud Deployment
 
 **AWS:**
+
 - ECS/Fargate for containers
 - RDS for MongoDB (or DocumentDB)
 - ELB for load balancing
 - CloudWatch for monitoring
 
 **Google Cloud:**
+
 - Cloud Run for containers
 - MongoDB Atlas
 - Cloud Load Balancing
 - Cloud Logging
 
 **Azure:**
+
 - Container Instances
 - Cosmos DB
 - Application Gateway
@@ -519,30 +588,39 @@ backend-api:
 ### Common Issues
 
 **1. ML Service Connection Errors**
+
 ```
 Error: ML Service communication error
 ```
+
 Solution:
+
 - Check ML service is running
 - Verify ML_SERVICE_URL is correct
 - Check network connectivity
 - Review firewall rules
 
 **2. MongoDB Connection Issues**
+
 ```
 Error: Could not connect to MongoDB
 ```
+
 Solution:
+
 - Verify MONGO_URI is correct
 - Check MongoDB is running
 - Check network access
 - Verify credentials
 
 **3. Cloudinary Upload Failures**
+
 ```
 Error: Failed to upload image
 ```
+
 Solution:
+
 - Check Cloudinary credentials
 - Verify internet connectivity
 - Check file size limits

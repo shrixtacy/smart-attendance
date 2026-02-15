@@ -6,8 +6,9 @@ from datetime import datetime
 from typing import Optional
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.core.security import get_current_user
 from app.db.mongo import db
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
@@ -234,3 +235,121 @@ async def get_class_risk():
         )
 
     return {"data": at_risk_classes}
+
+
+@router.get("/global")
+async def get_global_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get aggregated statistics for the logged-in teacher.
+
+    Returns:
+        - overall_attendance: Average attendance across all teacher's subjects
+        - risk_count: Number of subjects with attendance < 75%
+        - top_subjects: List of subjects sorted by attendance percentage (descending)
+    """
+    # Ensure user is a teacher
+    if current_user.get("role") != "teacher":
+        raise HTTPException(
+            status_code=403, detail="Only teachers can access global statistics"
+        )
+
+    # Get teacher's user ID
+    try:
+        teacher_oid = ObjectId(current_user["id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    # Query all subjects where teacher_id matches current user
+    subjects_cursor = db.subjects.find(
+        {"professor_ids": teacher_oid}, {"_id": 1, "name": 1, "code": 1}
+    )
+    subjects = await subjects_cursor.to_list(length=1000)
+
+    if not subjects:
+        # No subjects for this teacher
+        return {
+            "overall_attendance": 0.0,
+            "risk_count": 0,
+            "top_subjects": [],
+        }
+
+    subject_ids = [s["_id"] for s in subjects]
+    subject_map = {str(s["_id"]): s for s in subjects}
+
+    # Aggregate attendance data for all teacher's subjects
+    pipeline = [
+        {"$match": {"classId": {"$in": subject_ids}}},
+        {
+            "$group": {
+                "_id": "$classId",
+                "totalPresent": {"$sum": "$summary.present"},
+                "totalAbsent": {"$sum": "$summary.absent"},
+                "totalLate": {"$sum": "$summary.late"},
+                "totalStudents": {"$sum": "$summary.total"},
+            }
+        },
+        {
+            "$addFields": {
+                "attendancePercentage": {
+                    "$cond": {
+                        "if": {"$gt": ["$totalStudents", 0]},
+                        "then": {
+                            "$round": [
+                                {
+                                    "$multiply": [
+                                        {"$divide": ["$totalPresent", "$totalStudents"]},
+                                        100,
+                                    ]
+                                },
+                                2,
+                            ]
+                        },
+                        "else": 0,
+                    }
+                }
+            }
+        },
+        {"$sort": {"attendancePercentage": -1}},
+    ]
+
+    results = await db.attendance_daily.aggregate(pipeline).to_list(length=1000)
+
+    # Calculate overall statistics
+    subject_stats = []
+    total_percentage = 0.0
+    risk_count = 0
+
+    for result in results:
+        class_id_str = str(result["_id"])
+        subject_info = subject_map.get(class_id_str, {})
+        attendance_pct = result["attendancePercentage"]
+
+        subject_stats.append(
+            {
+                "subjectId": class_id_str,
+                "subjectName": subject_info.get("name", "Unknown"),
+                "subjectCode": subject_info.get("code", "N/A"),
+                "attendancePercentage": attendance_pct,
+                "totalPresent": result["totalPresent"],
+                "totalAbsent": result["totalAbsent"],
+                "totalLate": result["totalLate"],
+                "totalStudents": result["totalStudents"],
+            }
+        )
+
+        total_percentage += attendance_pct
+        if attendance_pct < 75:
+            risk_count += 1
+
+    # Calculate overall attendance (average of averages)
+    overall_attendance = (
+        round(total_percentage / len(subject_stats), 2) if subject_stats else 0.0
+    )
+
+    return {
+        "overall_attendance": overall_attendance,
+        "risk_count": risk_count,
+        "top_subjects": subject_stats,
+    }
