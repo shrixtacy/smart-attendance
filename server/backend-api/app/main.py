@@ -13,6 +13,7 @@ from .api.routes.attendance import router as attendance_router
 from .api.routes.auth import router as auth_router
 from .api.routes.students import router as students_router
 from .api.routes.notifications import router as notifications_router
+from .api.routes.analytics import router as analytics_router
 from .core.config import APP_NAME
 from app.services.attendance_daily import (
     ensure_indexes as ensure_attendance_daily_indexes,
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(attendance_router)
     app.include_router(settings_router.router)
     app.include_router(notifications_router)
+    app.include_router(analytics_router)
     app.include_router(health_router, tags=["Health"])
 
     return app
