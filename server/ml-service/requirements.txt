@@ -5,10 +5,10 @@ pydantic-settings==2.10.1
 python-multipart
 python-dotenv
 
-mediapipe==0.10.21
+mediapipe
 opencv-python-headless
-numpy==1.26.4
-pillow==11.0.0
+numpy
+pillow
 scikit-learn
 
 pytest

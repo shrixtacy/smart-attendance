@@ -67,3 +67,52 @@ async def get_current_teacher(
         "user": user,
         "teacher": teacher,
     }
+
+
+async def get_current_student(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    token = credentials.credentials
+    try:
+        payload = decode_jwt(token)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    if payload.get("role") != "student":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Student access required",
+        )
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    oid = ObjectId(user_id)
+    user = await db.users.find_one({"_id": oid})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    student = await db.students.find_one({"userId": oid})
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    return {
+        "id": oid,
+        "user": user,
+        "student": student,
+    }

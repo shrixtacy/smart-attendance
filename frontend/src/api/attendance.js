@@ -24,3 +24,20 @@ export const captureAndSend = async (
     );
   }
 };
+
+export const generateQR = async (subjectId, duration = 30) => {
+  const res = await api.post("/api/attendance/generate-qr", {
+    subject_id: subjectId,
+    valid_duration: duration,
+  });
+  return res.data;
+};
+
+export const markAttendanceQR = async (token, latitude, longitude) => {
+  const res = await api.post("/api/attendance/mark-qr", {
+    token,
+    lat: latitude,
+    long: longitude
+  });
+  return res.data;
+};

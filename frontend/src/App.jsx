@@ -17,6 +17,7 @@ import StudentDashboard from "./students/pages/StudentDashboard.jsx"
 import StudentSubjects from "./students/pages/StudentSubjects.jsx";
 import StudentForecast from "./students/pages/StudentForecast.jsx";
 import StudentProfile from "./students/pages/StudentProfile.jsx"
+import StudentScanner from "./students/pages/StudentScanner.jsx";
 import OAuthCallback from "./pages/OAuthCallback.jsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -29,13 +30,13 @@ import ForgotPassword from "./pages/ForgotPassword";
  */
 function RedirectToHome() {
   const storedUser = localStorage.getItem("user");
-  const user = storedUser ?  JSON.parse(storedUser) : null;
+  const user = storedUser ? JSON.parse(storedUser) : null;
   console.log(storedUser)
 
-  if(!user) return <Navigate to={"/login"} />
+  if (!user) return <Navigate to={"/login"} />
 
-  if(user.role === "teacher") return <Navigate to={"/dashboard"} />
-  if(user.role === "student") return <Navigate to={"/student-dashboard"} />
+  if (user.role === "teacher") return <Navigate to={"/dashboard"} />
+  if (user.role === "student") return <Navigate to={"/student-dashboard"} />
 
   return <Navigate to={"/login"} />
 }
@@ -48,6 +49,7 @@ const hideNavbarRoutes = [
   "/login",
   "/register",
   "/forgot-password",
+  "/student-scan-qr",
 ];
 
 /**
@@ -67,25 +69,26 @@ export default function App() {
 
       <main>
         <Routes>
-          <Route path="/" element={<RedirectToHome/>} />
-          <Route path="/dashboard" element={<Dashboard/>} />
-          <Route path="/attendance" element={<MarkAttendance/>}/>
-          <Route path="/students" element={<StudentList/>}/>
-          <Route path="/analytics" element={<Analytics/>}/>
-          <Route path="/reports" element={<Reports/>}/>
+          <Route path="/" element={<RedirectToHome />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/attendance" element={<MarkAttendance />} />
+          <Route path="/students" element={<StudentList />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/manage-schedule" element={<ProtectedRoute><ManageSchedule /></ProtectedRoute>} />
           <Route path="/messaging" element={<ProtectedRoute><Messaging /></ProtectedRoute>} />
-          <Route path="/settings" element={<Settings/>}/>
-          <Route path="/add-students" element={<AddStudents/>}/>
-          <Route path="/login" element={<Login/>}/>
-          <Route path="/register" element={<Register/>}/>
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/add-students" element={<AddStudents />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="*" element={<div>404 Not Found</div>} />
 
           {/* Students routes */}
-          <Route path="/student-dashboard" element={<StudentDashboard/>}/>
-          <Route path="/student-subjects" element={<StudentSubjects/>}/>
-          <Route path="/student-forecast" element={<StudentForecast/>}/>
-          <Route path="/student-profile" element={<StudentProfile/>}/>
+          <Route path="/student-dashboard" element={<StudentDashboard />} />
+          <Route path="/student-subjects" element={<StudentSubjects />} />
+          <Route path="/student-forecast" element={<StudentForecast />} />
+          <Route path="/student-profile" element={<StudentProfile />} />
+          <Route path="/student-scan-qr" element={<StudentScanner />} />
           <Route path="/oauth-callback" element={<OAuthCallback />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
 

@@ -1,15 +1,18 @@
 import base64
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List
 
+import jwt
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 
-from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD
+from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD, settings
 from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
 from app.services.ml_client import ml_client
+from app.api.deps import get_current_teacher, get_current_student
+from app.schemas.qr import QRTokenRequest, QRTokenResponse, QRMarkRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
@@ -256,4 +259,127 @@ async def confirm_attendance(payload: Dict):
         "ok": True,
         "present_updated": len(present_students),
         "absent_updated": len(absent_students),
+    }
+
+
+@router.post("/generate-qr", response_model=QRTokenResponse)
+async def generate_qr_token(
+    request: QRTokenRequest,
+    current_teacher: dict = Depends(get_current_teacher),
+):
+    """
+    Generate a signed QR token for attendance
+    """
+    # Verify subject belongs to teacher
+    # Check both teacher_id (direct) and professor_ids (list)
+    match_query = {
+        "_id": ObjectId(request.subject_id),
+        "$or": [
+            {"teacher_id": current_teacher["id"]},
+            {"professor_ids": current_teacher["id"]}
+        ]
+    }
+    
+    subject = await db.subjects.find_one(match_query)
+
+    if not subject:
+        # Fallback check if simple find fails (handling different schema versions)
+        subject = await db.subjects.find_one({"_id": ObjectId(request.subject_id)})
+        if not subject:
+             raise HTTPException(404, "Subject not found")
+        
+        # Check ownership manually if query didn't match
+        # This handles if teacher_id is missing or format differs
+        tid = current_teacher["id"]
+        authorized = False
+        if subject.get("teacher_id") == tid: authorized = True
+        if tid in subject.get("professor_ids", []): authorized = True
+        
+        if not authorized:
+            raise HTTPException(403, "Access denied to this subject")
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=request.valid_duration)
+
+    payload = {
+        "type": "attendance_qr",
+        "subject_id": request.subject_id,
+        "teacher_id": str(current_teacher["id"]),
+        "iat": now,
+        "exp": expires_at,
+    }
+
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "subject_id": request.subject_id
+    }
+
+
+@router.post("/mark-qr")
+async def mark_attendance_qr(
+    request: QRMarkRequest,
+    current_student: dict = Depends(get_current_student),
+):
+    """
+    Mark attendance via QR code token
+    """
+    try:
+        payload = jwt.decode(request.token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(400, "QR code expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(400, "Invalid QR code")
+
+    if payload.get("type") != "attendance_qr":
+        raise HTTPException(400, "Invalid token type")
+
+    subject_id = payload.get("subject_id")
+    student_id = current_student["student"]["_id"]
+    student_user_id = current_student["user"]["_id"]
+
+    # Verify student is enrolled in subject
+    # Note: students array usually stores student_id which links to students collection, 
+    # but sometimes might filter by verified status.
+    subject = await db.subjects.find_one({
+        "_id": ObjectId(subject_id),
+        "students.student_id": student_id
+    })
+
+    if not subject:
+        raise HTTPException(403, "Not enrolled in this subject")
+
+    today = date.today().isoformat()
+    
+    # Update attendance
+    result = await db.subjects.update_one(
+        {
+            "_id": ObjectId(subject_id),
+            "students": {
+                "$elemMatch": {
+                    "student_id": student_id,
+                    "attendance.lastMarkedAt": {"$ne": today}
+                }
+            }
+        },
+        {
+            "$inc": {"students.$.attendance.present": 1},
+            "$set": {"students.$.attendance.lastMarkedAt": today}
+        }
+    )
+    
+    if result.modified_count == 0:
+        # Check if already marked
+        student_in_subject = next((s for s in subject["students"] if s["student_id"] == student_id), None)
+        if student_in_subject and student_in_subject["attendance"].get("lastMarkedAt") == today:
+             raise HTTPException(400, "Attendance already marked for today")
+        raise HTTPException(500, "Failed to mark attendance or system error")
+        
+    return {
+        "status": "marked", 
+        "subject": subject["name"], 
+        "date": today,
+        "student": current_student["user"]["name"]
     }
