@@ -30,8 +30,12 @@ from .core.error_handlers import (
 from .core.exceptions import SmartAttendanceException
 from .middleware.correlation import CorrelationIdMiddleware
 from .middleware.timing import TimingMiddleware
+from .middleware.security import SecurityHeadersMiddleware
 
 from .api.routes.health import router as health_router
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.core.limiter import limiter
 
 load_dotenv()
 
@@ -67,6 +71,10 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(title=APP_NAME, lifespan=lifespan)
 
+    # Rate limiter
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
     # CORS MUST be added FIRST so headers are present even on errors
     app.add_middleware(
         CORSMiddleware,
@@ -77,7 +85,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Other Middleware
+    # Middleware
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TimingMiddleware)
 
