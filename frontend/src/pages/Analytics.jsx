@@ -102,269 +102,253 @@ export default function Analytics() {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--text-main)]">{t('analytics.title')}</h2>
-          <p className="text-[var(--text-body)]">{t('analytics.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Subject Selector Dropdown */}
-          <select
-            value={selectedSubject}
-            onChange={(e) => setSelectedSubject(e.target.value)}
-            className="px-4 py-2 bg-[var(--bg-card)] text-[var(--text-main)] border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
-          >
-            <option value="all">All Subjects</option>
-            {MOCK_SUBJECTS.map((subject) => (
-              <option key={subject.id} value={subject.id}>
-                {subject.name} ({subject.code})
-              </option>
-            ))}
-          </select>
-
-          <button className="px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
-            <Download size={18} />
-            {t('analytics.export')}
-          </button>
-          <button className="px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--action-info-hover)] font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
-            <FileText size={18} />
-            {t('analytics.generate_report')}
-          </button>
-        </div>
-      </div>
-
-      {/* --- TOP STATS ROW --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Stat 1 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.overall')}</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">89 <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
+    <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+        {/* --- HEADER --- */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--text-main)]">{t('analytics.title')}</h2>
+            <p className="text-[var(--text-body)]">{t('analytics.subtitle')}</p>
           </div>
-          <div className="flex items-center text-xs font-semibold text-[var(--success)]">
-            <ArrowUpRight size={14} className="mr-1" />
-            {t('analytics.stats.increase')}
+          <div className="flex items-center gap-3">
+            {/* Subject Selector Dropdown */}
+            <select
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="px-4 py-2 bg-[var(--bg-card)] text-[var(--text-main)] border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+            >
+              <option value="all">All Subjects</option>
+              {MOCK_SUBJECTS.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name} ({subject.code})
+                </option>
+              ))}
+            </select>
+
+            <button className="px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
+              <Download size={18} />
+              {t('analytics.export')}
+            </button>
+            <button className="px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--action-info-hover)] font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
+              <FileText size={18} />
+              {t('analytics.generate_report')}
+            </button>
           </div>
         </div>
 
-        {/* Stat 2 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.avg_late')}</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">7</h3>
-            <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.per_week')}</span>
-          </div>
-          <div className="flex items-center text-xs font-medium text-[var(--text-body)] opacity-70">
-            <Clock size={14} className="mr-1" />
-            {t('analytics.stats.avg_time', {time: '09:15 AM'})}
-          </div>
-        </div>
-
-        {/* Stat 3 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.at_risk')}</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">3</h3>
-            <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.sections')}</span>
-          </div>
-          <div className="flex items-center text-xs font-semibold text-[var(--success)]">
-             <span className="text-[var(--text-body)] mr-1">{t('analytics.stats.more_than_last_month')}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* --- MIDDLE SECTION: CHARTS --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Main Trend Chart (Left - 2 Cols) */}
-        <div className="lg:col-span-2 bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h3 className="font-bold text-lg text-[var(--text-main)]">{t('analytics.chart.trend_title')}</h3>
-              <p className="text-sm text-[var(--text-body)]">{t('analytics.chart.trend_desc')}</p>
-            </div>
-            
-            {/* --- DROPDOWN SECTION (Fixed) --- */}
-            <div className="flex gap-2 items-center">
-              <div className="relative" ref={dropdownRef}>
-                <button 
-                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="text-sm text-[var(--text-body)] flex items-center gap-1 hover:bg-[var(--bg-secondary)] px-3 py-1.5 rounded border border-[var(--border-color)] transition"
-                >
-                  {periodLabels[selectedPeriod]} <ChevronDown size={14} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
-                </button>
-
-                {isDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg z-10 w-32 overflow-hidden">
-                    {periodOptions.map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => handlePeriodChange(option)}
-                        className={`w-full text-left px-4 py-2 text-sm transition ${
-                          selectedPeriod === option
-                            ? 'bg-[var(--primary)] text-[var(--text-on-primary)] font-medium'
-                            : 'text-[var(--text-main)] hover:bg-[var(--bg-secondary)]'
-                        }`}
-                      >
-                        {periodLabels[option]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <button 
-                onClick={() => setSelectedPeriod("Month")} 
-                className="text-sm text-[var(--primary)] font-medium hover:underline"
-              >
-                {t('analytics.chart.reset')}
-              </button>
-            </div>
-            {/* --- END DROPDOWN SECTION --- */}
-
-          </div>
-
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={TREND_DATA}>
-                <defs>
-                  <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: "var(--bg-card)", color: "var(--text-main)",}}
-                />
-                <Area type="monotone" dataKey="present" stroke="var(--primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorPresent)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Side Panel (Right - 1 Col) */}
-        <div className="space-y-6">
-          
-          {/* Donut Chart */}
+        {/* --- TOP STATS ROW --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Stat 1 */}
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <h3 className="font-bold text-[var(--text-main)] mb-1">{t('analytics.donut.title')}</h3>
-            <p className="text-xs text-[var(--text-body)] mb-4">{t('analytics.donut.subtitle')}</p>
-            
-            <div className="flex items-center justify-between">
-              <div className="h-32 w-32 relative">
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-[var(--text-main)]">89%</span>
-                  <span className="text-[10px] text-[var(--text-body)] opacity-80">{t('analytics.donut.avg')}</span>
-                </div>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={DISTRIBUTION_DATA}
-                      innerRadius={45}
-                      outerRadius={60}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {DISTRIBUTION_DATA.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.overall')}</p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">89 <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
+            </div>
+            <div className="flex items-center text-xs font-semibold text-[var(--success)]">
+              <ArrowUpRight size={14} className="mr-1" />
+              {t('analytics.stats.increase')}
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                {DISTRIBUTION_DATA.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs w-28">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
-                        <span className="text-[var(--text-body)] opacity-80">{t(`trends.${item.name.toLowerCase()}`, item.name)}</span>
+          {/* Stat 2 */}
+          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.avg_late')}</p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">7</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.per_week')}</span>
+            </div>
+            <div className="flex items-center text-xs font-medium text-[var(--text-body)] opacity-70">
+              <Clock size={14} className="mr-1" />
+              {t('analytics.stats.avg_time', {time: '09:15 AM'})}
+            </div>
+          </div>
+
+          {/* Stat 3 */}
+          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.at_risk')}</p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">3</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.sections')}</span>
+            </div>
+            <div className="flex items-center text-xs font-semibold text-[var(--success)]">
+               <span className="text-[var(--text-body)] mr-1">{t('analytics.stats.more_than_last_month')}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* --- MIDDLE SECTION: CHARTS --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Trend Chart (Left - 2 Cols) */}
+          <div className="lg:col-span-2 bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="font-bold text-lg text-[var(--text-main)]">{t('analytics.chart.trend_title')}</h3>
+                <p className="text-sm text-[var(--text-body)]">{t('analytics.chart.trend_desc')}</p>
+              </div>
+              {/* --- DROPDOWN SECTION (Fixed) --- */}
+              <div className="flex gap-2 items-center">
+                <div className="relative" ref={dropdownRef}>
+                  <button 
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="text-sm text-[var(--text-body)] flex items-center gap-1 hover:bg-[var(--bg-secondary)] px-3 py-1.5 rounded border border-[var(--border-color)] transition"
+                  >
+                    {periodLabels[selectedPeriod]} <ChevronDown size={14} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
+                  </button>
+                  {isDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg z-10 w-32 overflow-hidden">
+                      {periodOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => handlePeriodChange(option)}
+                          className={`w-full text-left px-4 py-2 text-sm transition ${
+                            selectedPeriod === option
+                              ? 'bg-[var(--primary)] text-[var(--text-on-primary)] font-medium'
+                              : 'text-[var(--text-main)] hover:bg-[var(--bg-secondary)]'
+                          }`}
+                        >
+                          {periodLabels[option]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setSelectedPeriod("Month")} 
+                  className="text-sm text-[var(--primary)] font-medium hover:underline"
+                >
+                  {t('analytics.chart.reset')}
+                </button>
+              </div>
+              {/* --- END DROPDOWN SECTION --- */}
+            </div>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={TREND_DATA}>
+                  <defs>
+                    <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: "var(--bg-card)", color: "var(--text-main)",}}
+                  />
+                  <Area type="monotone" dataKey="present" stroke="var(--primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorPresent)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          {/* Side Panel (Right - 1 Col) */}
+          <div className="space-y-6">
+            {/* Donut Chart */}
+            <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+              <h3 className="font-bold text-[var(--text-main)] mb-1">{t('analytics.donut.title')}</h3>
+              <p className="text-xs text-[var(--text-body)] mb-4">{t('analytics.donut.subtitle')}</p>
+              <div className="flex items-center justify-between">
+                <div className="h-32 w-32 relative">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xl font-bold text-[var(--text-main)]">89%</span>
+                    <span className="text-[10px] text-[var(--text-body)] opacity-80">{t('analytics.donut.avg')}</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={DISTRIBUTION_DATA}
+                        innerRadius={45}
+                        outerRadius={60}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {DISTRIBUTION_DATA.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {DISTRIBUTION_DATA.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs w-28">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
+                          <span className="text-[var(--text-body)] opacity-80">{t(`trends.${item.name.toLowerCase()}`, item.name)}</span>
+                        </div>
+                        <span className="font-bold text-[var(--text-main)]">{item.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Best Performing List */}
+            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
+              <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.best')}</h3>
+              <div className="space-y-3">
+                {CLASS_PERFORMANCE.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
+                        <span className="text-[var(--text-body)]">{c.name}</span>
                       </div>
-                      <span className="font-bold text-[var(--text-main)]">{item.value}%</span>
+                      <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+             {/* Needs Support List */}
+             <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
+              <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.needs_support')}</h3>
+              <div className="space-y-3">
+                {CLASS_RISK.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
+                        <span className="text-[var(--text-body)]">{c.name}</span>
+                      </div>
+                      <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Best Performing List */}
-          <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.best')}</h3>
-            <div className="space-y-3">
-              {CLASS_PERFORMANCE.map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
-                      <span className="text-[var(--text-body)]">{c.name}</span>
-                    </div>
-                    <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
+        {/* --- BOTTOM SECTION: CLASS BREAKDOWN --- */}
+        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+          <h3 className="font-bold text-lg text-[var(--text-main)] mb-1">{t('analytics.breakdown.title')}</h3>
+          <p className="text-sm text-[var(--text-body)] mb-6">{t('analytics.breakdown.subtitle')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {CLASS_BREAKDOWN.map((cls, idx) => (
+              <div key={idx} className="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-[var(--text-main)]">{cls.class}</h4>
+                  <span className="text-xs text-[var(--text-body)] opacity-80">{t('analytics.breakdown.students', {count: cls.students})}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-          
-           {/* Needs Support List */}
-           <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.needs_support')}</h3>
-            <div className="space-y-3">
-              {CLASS_RISK.map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
-                      <span className="text-[var(--text-body)]">{c.name}</span>
-                    </div>
-                    <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
+                {/* Progress Bar Container */}
+                <div className="h-4 w-full bg-[var(--bg-card)] rounded-full flex overflow-hidden shadow-inner mb-2">
+                  <div 
+                    className={`h-full ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} 
+                    style={{width: `${cls.present}%`}}
+                  ></div>
+                  <div className="h-full bg-[var(--warning)]/40" style={{width: `${cls.late}%`}}></div>
+                  <div className="h-full bg-[var(--danger)]/40" style={{width: `${cls.absent}%`}}></div>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between items-center text-xs">
+                    <span className={`px-2 py-0.5 rounded text-[var(--text-on-primary)] font-bold ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`}>
+                      {t('analytics.breakdown.present_val', {val: cls.present})}
+                    </span>
+                    <span className="text-[var(--text-body)] opacity-80">
+                      {t('analytics.breakdown.late_absent', {late: cls.late, absent: cls.absent})}
+                    </span>
+                </div>
+              </div>
+            ))}
           </div>
-
         </div>
       </div>
-
-      {/* --- BOTTOM SECTION: CLASS BREAKDOWN --- */}
-      <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-        <h3 className="font-bold text-lg text-[var(--text-main)] mb-1">{t('analytics.breakdown.title')}</h3>
-        <p className="text-sm text-[var(--text-body)] mb-6">{t('analytics.breakdown.subtitle')}</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {CLASS_BREAKDOWN.map((cls, idx) => (
-            <div key={idx} className="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-[var(--text-main)]">{cls.class}</h4>
-                <span className="text-xs text-[var(--text-body)] opacity-80">{t('analytics.breakdown.students', {count: cls.students})}</span>
-              </div>
-              
-              {/* Progress Bar Container */}
-              <div className="h-4 w-full bg-[var(--bg-card)] rounded-full flex overflow-hidden shadow-inner mb-2">
-                <div 
-                  className={`h-full ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} 
-                  style={{width: `${cls.present}%`}}
-                ></div>
-                <div className="h-full bg-[var(--warning)]/40" style={{width: `${cls.late}%`}}></div>
-                <div className="h-full bg-[var(--danger)]/40" style={{width: `${cls.absent}%`}}></div>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                  <span className={`px-2 py-0.5 rounded text-[var(--text-on-primary)] font-bold ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`}>
-                    {t('analytics.breakdown.present_val', {val: cls.present})}
-                  </span>
-                  <span className="text-[var(--text-body)] opacity-80">
-                    {t('analytics.breakdown.late_absent', {late: cls.late, absent: cls.absent})}
-                  </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
     </div>
   );
 }
