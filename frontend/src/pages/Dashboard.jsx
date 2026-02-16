@@ -142,6 +142,8 @@ export default function Dashboard() {
 
   // Get next upcoming class - memoized to avoid redundant computation
   const nextClass = useMemo(() => {
+    // trigger re-calc on tick
+    void tick;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 

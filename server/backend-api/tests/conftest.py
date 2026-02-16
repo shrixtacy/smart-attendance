@@ -17,12 +17,12 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Provide a fresh event loop per test session (avoids closed-loop errors)."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+# @pytest.fixture(scope="session")
+# def event_loop():
+#     """Provide a fresh event loop per test session (avoids closed-loop errors)."""
+#     loop = asyncio.new_event_loop()
+#     yield loop
+#     loop.close()
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -55,7 +55,51 @@ async def db(db_client):
         pass
 
     database = db_client[db_name]
-    yield database
+
+    # Patch the global db instance to use the test client's database
+    # This ensures it uses the correct event loop for each test function
+    # Also patch modules that have already imported db
+    patchers = [
+        patch("app.db.mongo.db", database),
+        patch("app.db.mongo.client", db_client),
+    ]
+    
+    # Try patching other modules if they are already imported
+    modules_to_patch = [
+        "app.api.routes.analytics.db",
+        "app.api.routes.attendance.db",
+        "app.api.routes.teacher_settings.db",
+        "app.api.deps.db",
+        "app.services.attendance.db",
+        "app.services.attendance_daily.db",
+        "app.services.qr_service.db",
+        "app.services.students.db",
+        "app.services.subject_service.db",
+        "app.db.subjects_repo.db"
+    ]
+    
+    started_patchers = []
+    
+    for p in patchers:
+        p.start()
+        started_patchers.append(p)
+        
+    for target in modules_to_patch:
+        try:
+            # Check if module is loaded (simple heuristic using sys.modules)
+            module_name = target.rsplit(".", 1)[0]
+            if module_name in sys.modules:
+                p = patch(target, database)
+                p.start()
+                started_patchers.append(p)
+        except Exception:
+            pass
+
+    try:
+        yield database
+    finally:
+        for p in reversed(started_patchers):
+            p.stop()
 
     # Cleanup after test
     try:

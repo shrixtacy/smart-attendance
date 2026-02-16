@@ -6,7 +6,6 @@ from pydantic import BaseModel
 import os
 import pytz
 
-from app.db.mongo import db
 from app.api.deps import get_current_teacher
 
 
@@ -49,7 +48,9 @@ async def get_today_schedule(current: dict = Depends(get_current_teacher)):
     except pytz.UnknownTimeZoneError:
         school_tz = pytz.timezone("Asia/Kolkata")
     
-    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    days_of_week = [
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+    ]
     now_in_school_tz = datetime.now(school_tz)
     current_day = days_of_week[now_in_school_tz.weekday()]
     
@@ -97,7 +98,8 @@ async def get_today_schedule(current: dict = Depends(get_current_teacher)):
                         start_time=start_time,
                         end_time=end_time,
                         slot=period.get("slot", 0),
-                        attendance_status=None  # TODO: Check if attendance exists for today
+                        # TODO: Check if attendance exists for today
+                        attendance_status=None
                     )
                     today_classes.append(class_period)
             

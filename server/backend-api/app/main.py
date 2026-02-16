@@ -16,8 +16,8 @@ from .api.routes.analytics import router as analytics_router
 from .api.routes.notifications import router as notifications_router
 from .api.routes.reports import router as reports_router
 from .api.routes.students import router as students_router
-from .core.config import APP_NAME, ORIGINS
 from .api.routes.health import router as health_router
+from .core.config import APP_NAME, ORIGINS
 from app.services.attendance_daily import (
     ensure_indexes as ensure_attendance_daily_indexes,
 )

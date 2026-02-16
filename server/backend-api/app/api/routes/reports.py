@@ -101,8 +101,6 @@ async def _get_attendance_and_students(
     query = {"subject_id": ObjectId(subject_id)}
 
     # Convert string dates to datetime objects for proper MongoDB comparison.
-    # The DB may store dates as datetime objects, so string comparison would
-    # silently return zero results.
     date_filter = {}
     if start_date:
         try:
@@ -157,6 +155,27 @@ async def _get_attendance_and_students(
         }
 
     return attendance_records, students, was_truncated
+
+
+def _add_page_footer(canvas, doc, school_name):
+    """Draw page number, timestamp, and confidentiality note on every page."""
+    canvas.saveState()
+    canvas.setFont('Helvetica', 9)
+    canvas.setFillColor(colors.gray)
+
+    # Page number on the right
+    page_num = canvas.getPageNumber()
+    canvas.drawRightString(doc.pagesize[0] - 30, 30, f"Page {page_num}")
+
+    # School name + confidential on the left
+    canvas.drawString(30, 30, f"{school_name} - Confidential")
+
+    # Generated timestamp in the center
+    canvas.setFont('Helvetica', 7)
+    timestamp = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    canvas.drawCentredString(doc.pagesize[0] / 2, 30, timestamp)
+
+    canvas.restoreState()
 
 
 @router.get("/export/pdf")
@@ -226,7 +245,7 @@ async def export_attendance_pdf(
         elements.append(Paragraph(html.escape(school_name), title_style))
         elements.append(Spacer(1, 10))
 
-        # Report metadata (2-column layout) — escape user-controlled data
+        # Report metadata (2-column layout)
         date_range_str = f"{start_date or 'All Time'} to {end_date or 'Present'}"
         safe_teacher = html.escape(teacher_name)
         safe_subject = html.escape(subject.get('name', 'Unknown'))
@@ -414,7 +433,10 @@ async def export_attendance_csv(
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     current_teacher: dict = Depends(get_current_teacher),
 ):
-    """Export attendance report as a CSV file."""
+    """Export attendance report as a CSV file.
+    
+    Generates a detailed log of attendance events corresponding to the date filters.
+    """
     try:
         # --- Validate subject & teacher access ---
         subject, teacher_id = await _get_subject_and_validate(
@@ -479,24 +501,3 @@ async def export_attendance_csv(
         raise HTTPException(
             status_code=500, detail="Failed to generate CSV report"
         )
-
-
-def _add_page_footer(canvas, doc, school_name):
-    """Draw page number, timestamp, and confidentiality note on every page."""
-    canvas.saveState()
-    canvas.setFont('Helvetica', 9)
-    canvas.setFillColor(colors.gray)
-
-    # Page number on the right
-    page_num = canvas.getPageNumber()
-    canvas.drawRightString(doc.pagesize[0] - 30, 30, f"Page {page_num}")
-
-    # School name + confidential on the left
-    canvas.drawString(30, 30, f"{school_name} - Confidential")
-
-    # Generated timestamp in the center
-    canvas.setFont('Helvetica', 7)
-    timestamp = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    canvas.drawCentredString(doc.pagesize[0] / 2, 30, timestamp)
-
-    canvas.restoreState()

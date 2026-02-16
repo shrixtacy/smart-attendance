@@ -7,6 +7,7 @@ on:
 
 permissions:
   issues: write
+  pull-requests: read # Needed to check for open PRs
 
 jobs:
   enforce-one-issue:
@@ -33,12 +34,31 @@ jobs:
             // We want to find *previous* or *other* issues.
             const otherIssues = assignedIssues.filter(i => i.number !== currentIssueNumber && !i.pull_request);
 
-            // 3. If they have other issues, triggered the PROTECTION
+            // 3. Logic: Check if user has other issues
             if (otherIssues.length > 0) {
               
-              const issueLinks = otherIssues.map(i => `#${i.number}`).join(', ');
+              // --- NEW: PR EXCEPTION CHECK ---
+              // Search for OPEN PRs created by this user in this repo
+              const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
+                q: `is:pr is:open author:${assignee} repo:${repo.owner}/${repo.repo}`
+              });
 
-              console.log(`⚠️ Violation detected. User has ${otherIssues.length} other issues.`);
+              if (prSearch.total_count > 0) {
+                console.log(`✅ Exception granted: @${assignee} has ${prSearch.total_count} open PR(s).`);
+                console.log("They are likely waiting for review. Assignment ALLOWED.");
+                
+                // Post a friendly note (Optional, remove if too noisy)
+                await github.rest.issues.createComment({
+                  ...repo,
+                  issue_number: currentIssueNumber,
+                  body: `ℹ️ **Note:** @${assignee} has other open issues, but also has pending Pull Requests. Assignment is allowed.`
+                });
+                return; // STOP HERE - Do not block
+              }
+              // -------------------------------
+
+              const issueLinks = otherIssues.map(i => `#${i.number}`).join(', ');
+              console.log(`⚠️ Violation detected. User has ${otherIssues.length} other issues and NO open PRs.`);
 
               // A. Post a Warning Comment
               await github.rest.issues.createComment({
@@ -46,9 +66,10 @@ jobs:
                 issue_number: currentIssueNumber,
                 body: `🚫 **Assignment Blocked**
                 
-                @${assignee} is already assigned to **${otherIssues.length} other open issue(s)**: ${issueLinks}.
+                @${assignee} is already assigned to **${otherIssues.length} other open issue(s)**: ${issueLinks} and has **no open Pull Requests**.
                 
-                According to project policy, a contributor can only hold **one issue at a time**.
+                **Policy:** You cannot take a new issue while holding others without submitting code.
+                👉 Please submit a PR for your current issue first.
                 
                 ⚠️ **Action Taken:** The user has been automatically unassigned from this issue.`
               });
@@ -62,5 +83,5 @@ jobs:
               
               console.log(`✅ User unassigned from #${currentIssueNumber}`);
             } else {
-              console.log("✅ User is clear. Assignment allowed.");
+              console.log("✅ User is clear (0 other issues). Assignment allowed.");
             }

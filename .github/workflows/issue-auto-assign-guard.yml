@@ -6,7 +6,7 @@ on:
 
 permissions:
   issues: write
-  pull-requests: read
+  pull-requests: read # Needed to check for PRs
 
 jobs:
   auto-assign:
@@ -43,8 +43,8 @@ jobs:
               return;
             }
 
-            // 5. NEW: Check if the issue is "On Hold"
-            const onHoldLabel = "on-hold"; // Make sure this matches your label name exactly or lowercase
+            // 5. Check if the issue is "On Hold"
+            const onHoldLabel = "on-hold"; 
             const isHold = issue.labels.some(label => label.name.toLowerCase() === onHoldLabel);
 
             if (isHold) {
@@ -73,20 +73,44 @@ jobs:
             });
 
             if (assignedIssues.length > 0) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `👋 @${author}
-            
-            You already have an **assigned open issue** (#${assignedIssues[0].number}).
-            
-            **Rule:** You can only work on **one issue at a time**.
-            👉 Please complete or close your current issue before taking a new one.
-            
-            Thanks for contributing 🚀`
+              
+              // --- PR EXCEPTION CHECK ---
+              // Search for OPEN PRs by this author in this repo
+              const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
+                q: `is:pr is:open author:${author} repo:${context.repo.owner}/${context.repo.repo}`
               });
-              return;
+
+              if (prSearch.total_count > 0) {
+                 // User has an open PR, so we ALLOW this new assignment.
+                 console.log(`@${author} has open PRs. Granting exception.`);
+                 
+                 await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    body: `ℹ️ **Multi-Tasking Exception**
+                    
+                    @${author} you have other open issues, but since you also have pending Pull Requests, this assignment is allowed.`
+                 });
+                 // We do NOT return here; we fall through to the assignment logic below.
+              
+              } else {
+                 // User has issues but NO PRs -> BLOCK THEM
+                 await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `👋 @${author}
+              
+                  You already have an **assigned open issue** (#${assignedIssues[0].number}) and **no open Pull Requests**.
+              
+                  **Rule:** You can only work on **one issue at a time** unless you have submitted code (PR) for your previous task.
+                  👉 Please submit a PR for your current issue first.
+              
+                  Thanks for contributing 🚀`
+                });
+                return; // Stop execution
+              }
             }
 
             // 7. Assign the issue

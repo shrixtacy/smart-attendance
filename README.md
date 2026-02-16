@@ -1264,7 +1264,7 @@ We take security seriously and will respond promptly to all reports.
 - [ ] Reports generation
 - [ ] Attendance geofencing
 - [ ] QR code backup attendance
-- [ ] Multi-language support
+- [x] Multi-language support
 
 ### Version 2.0 (Planned)
 

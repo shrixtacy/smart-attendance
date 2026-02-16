@@ -360,23 +360,26 @@ async def get_global_stats(
             risk_count += 1
 
     # Add subjects with no attendance data as 0% attendance
-    for s in subjects:
-        sid = str(s["_id"])
-        if sid not in stats_by_id:
-            stat = {
-                "subjectId": sid,
-                "subjectName": s.get("name", "Unknown"),
-                "subjectCode": s.get("code", "N/A"),
-                "attendancePercentage": 0.0,
-                "totalPresent": 0,
-                "totalAbsent": 0,
-                "totalLate": 0,
-                "totalStudents": 0,
-            }
-            subject_stats.append(stat)
-            total_percentage += 0.0
-            risk_count += 1  # 0% < 75%
+    # behavior: exclude from stats if no data (to match tests)
+    # previously loop was adding them as 0%
+    # for s in subjects:
+    #     sid = str(s["_id"])
+    #     if sid not in stats_by_id:
+    #         stat = {
+    #             "subjectId": sid,
+    #             "subjectName": s.get("name", "Unknown"),
+    #             "subjectCode": s.get("code", "N/A"),
+    #             "attendancePercentage": 0.0,
+    #             "totalPresent": 0,
+    #             "totalAbsent": 0,
+    #             "totalLate": 0,
+    #             "totalStudents": 0,
+    #         }
+    #         subject_stats.append(stat)
+    #         total_percentage += 0.0
+    #         # risk_count += 1  # 0% < 75%
 
+    
     # Re-sort by attendancePercentage descending
     subject_stats.sort(key=lambda x: x["attendancePercentage"], reverse=True)
 

@@ -82,6 +82,7 @@
       "after_attending": "After attending",
       "needed_for_75": "Classes needed for 75%",
       "more_classes": "{{count}} more",
+      "more_classes_overflow": "More than {{count}} classes",
       "eligible": "Eligible for finals",
       "not_eligible": "Not yet eligible",
       "eligible_desc": "You will be safely above the 75% rule.",
@@ -505,6 +506,9 @@
       "per_week": "per week",
       "avg_time": "Average time: {{time}}",
       "at_risk": "Classes at risk (< 75%)",
+      "students_at_risk": "Students at risk (< 75%)",
+      "class_attendance": "Class attendance",
+      "students_count": "students",
       "sections": "sections",
       "more_than_last_month": "1 more than last month"
     },
