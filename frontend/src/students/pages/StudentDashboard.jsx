@@ -2,14 +2,7 @@ import React, { useState } from "react";
 import { 
   Bell, 
   Shield, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Home, 
-  BookOpen, 
-  TrendingUp, 
-  User,
-  Menu
+  Clock
 } from "lucide-react";
 import StudentNavigation from "../components/StudentNavigation"
 
@@ -182,7 +175,7 @@ export default function StudentDashboard() {
               
               {/* Empty State / End of List Decor */}
               <div className="text-center mt-6">
-                <p className="text-xs text-gray-400">You're all caught up for today!</p>
+                <p className="text-xs text-gray-400">You&apos;re all caught up for today!</p>
               </div>
             </div>
 

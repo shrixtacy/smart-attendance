@@ -4,6 +4,7 @@ pydantic==2.10.3
 pydantic-settings==2.10.1
 python-multipart
 python-dotenv
+httpx
 
 mediapipe==0.10.21
 opencv-python-headless
