@@ -36,6 +36,21 @@ const DISTRIBUTION_DATA = [
   { name: 'Absent', value: 19, color: "var(--danger)" },  
 ];
 
+const GLOBAL_STATS = {
+  attendance: 89,
+  avgLate: 7,
+  riskCount: 3,
+  lateTime: '09:15 AM'
+};
+
+const SUBJECT_STATS_MAP = {
+  '1': { attendance: 92, avgLate: 4, riskCount: 5, lateTime: '09:05 AM' }, // Math
+  '2': { attendance: 85, avgLate: 8, riskCount: 12, lateTime: '09:10 AM' }, // Physics
+  '3': { attendance: 78, avgLate: 12, riskCount: 15, lateTime: '09:20 AM' }, // Chemistry
+  '4': { attendance: 95, avgLate: 2, riskCount: 2, lateTime: '09:02 AM' }, // CS
+  '5': { attendance: 82, avgLate: 6, riskCount: 9, lateTime: '09:08 AM' }, // English
+};
+
 const CLASS_PERFORMANCE = [
   { name: 'Grade 9A', score: 91 },
   { name: 'Grade 10A', score: 88 },
@@ -100,6 +115,10 @@ export default function Analytics() {
     setIsDropdownOpen(false);
     // TODO: Trigger data fetch when backend is ready
   };
+  
+  // Logic for dynamic stats based on selection
+  const isGlobal = selectedSubject === 'all';
+  const stats = isGlobal ? GLOBAL_STATS : (SUBJECT_STATS_MAP[selectedSubject] || GLOBAL_STATS);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
@@ -140,9 +159,11 @@ export default function Analytics() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Stat 1 */}
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.overall')}</p>
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.overall') : t('analytics.stats.class_attendance')}
+            </p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">89 <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.attendance} <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
             </div>
             <div className="flex items-center text-xs font-semibold text-[var(--success)]">
               <ArrowUpRight size={14} className="mr-1" />
@@ -154,21 +175,25 @@ export default function Analytics() {
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
             <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.avg_late')}</p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">7</h3>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.avgLate}</h3>
               <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.per_week')}</span>
             </div>
             <div className="flex items-center text-xs font-medium text-[var(--text-body)] opacity-70">
               <Clock size={14} className="mr-1" />
-              {t('analytics.stats.avg_time', {time: '09:15 AM'})}
+              {t('analytics.stats.avg_time', {time: stats.lateTime})}
             </div>
           </div>
 
           {/* Stat 3 */}
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.at_risk')}</p>
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.at_risk') : t('analytics.stats.students_at_risk')}
+            </p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">3</h3>
-              <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.sections')}</span>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.riskCount}</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">
+                {isGlobal ? t('analytics.stats.sections') : t('analytics.stats.students_count')}
+              </span>
             </div>
             <div className="flex items-center text-xs font-semibold text-[var(--success)]">
                <span className="text-[var(--text-body)] mr-1">{t('analytics.stats.more_than_last_month')}</span>
