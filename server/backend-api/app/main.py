@@ -116,7 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router.router)
     app.include_router(notifications_router)
     app.include_router(analytics_router)
-    app.include_router(reports_router) 
+    app.include_router(reports_router)
     app.include_router(health_router, tags=["Health"])
 
     return app
