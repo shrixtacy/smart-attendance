@@ -14,17 +14,50 @@ from app.db.mongo import db
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 
+def _get_teacher_oid(current_user: dict) -> ObjectId:
+    if current_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can access analytics")
+
+    try:
+        return ObjectId(current_user["id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+
+async def _get_teacher_subjects(teacher_oid: ObjectId) -> list[dict]:
+    subjects_cursor = db.subjects.find(
+        {"professor_ids": teacher_oid},
+        {"_id": 1, "name": 1, "code": 1},
+    )
+    return await subjects_cursor.to_list(length=1000)
+
+
+async def _verify_teacher_class_access(teacher_oid: ObjectId, class_oid: ObjectId) -> None:
+    subject = await db.subjects.find_one(
+        {"_id": class_oid, "professor_ids": teacher_oid},
+        {"_id": 1},
+    )
+    if not subject:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to this class",
+        )
+
+
 @router.get("/attendance-trend")
 async def get_attendance_trend(
     classId: str = Query(..., description="Class/Subject ID"),
     dateFrom: str = Query(..., description="Start date (YYYY-MM-DD)"),
     dateTo: str = Query(..., description="End date (YYYY-MM-DD)"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get attendance trend for a specific class within a date range.
 
     Returns daily attendance data including present, absent, late counts and percentage.
     """
+    teacher_oid = _get_teacher_oid(current_user)
+
     # Validate dates
     try:
         start_date = datetime.fromisoformat(dateFrom)
@@ -42,6 +75,8 @@ async def get_attendance_trend(
         class_oid = ObjectId(classId)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid classId format")
+
+    await _verify_teacher_class_access(teacher_oid, class_oid)
 
     # Query attendance_daily collection
     cursor = db.attendance_daily.find(
@@ -81,24 +116,33 @@ async def get_monthly_summary(
     classId: Optional[str] = Query(
         None, description="Optional class/subject ID filter"
     ),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get monthly attendance summary aggregated by month.
 
     Can be filtered by classId or return all classes.
     """
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
+    subject_ids = [subject["_id"] for subject in subjects]
+
+    if not subject_ids:
+        return {"data": []}
+
     # Build match filter
-    match_filter = {}
+    match_filter = {"classId": {"$in": subject_ids}}
     if classId:
         try:
             class_oid = ObjectId(classId)
-            match_filter["classId"] = class_oid
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid classId format")
+        await _verify_teacher_class_access(teacher_oid, class_oid)
+        match_filter["classId"] = class_oid
 
     # Aggregate by month
     pipeline = [
-        {"$match": match_filter} if match_filter else {"$match": {}},
+        {"$match": match_filter},
         {
             "$addFields": {
                 "yearMonth": {"$substr": ["$date", 0, 7]}  # Extract YYYY-MM
@@ -168,14 +212,24 @@ async def get_monthly_summary(
 
 
 @router.get("/class-risk")
-async def get_class_risk():
+async def get_class_risk(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get classes at risk (attendance percentage < 75%).
 
     Returns classes with low attendance rates that need attention.
     """
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
+    subject_ids = [subject["_id"] for subject in subjects]
+
+    if not subject_ids:
+        return {"data": []}
+
     # Aggregate to get overall percentage per class
     pipeline = [
+        {"$match": {"classId": {"$in": subject_ids}}},
         {
             "$group": {
                 "_id": "$classId",
@@ -261,23 +315,8 @@ async def get_global_stats(
         - risk_count: Number of subjects with attendance < 75%
         - top_subjects: List of subjects sorted by attendance percentage (descending)
     """
-    # Ensure user is a teacher
-    if current_user.get("role") != "teacher":
-        raise HTTPException(
-            status_code=403, detail="Only teachers can access global statistics"
-        )
-
-    # Get teacher's user ID
-    try:
-        teacher_oid = ObjectId(current_user["id"])
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-
-    # Query all subjects where teacher_id matches current user
-    subjects_cursor = db.subjects.find(
-        {"professor_ids": teacher_oid}, {"_id": 1, "name": 1, "code": 1}
-    )
-    subjects = await subjects_cursor.to_list(length=1000)
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
 
     if not subjects:
         # No subjects for this teacher
