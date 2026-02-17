@@ -15,6 +15,43 @@ from app.schemas.analytics import SubjectStatsResponse, StudentStat
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 
+# -------------------------------------------------------------------------
+# HELPER FUNCTIONS (From Branch 304 - Security & Auth)
+# -------------------------------------------------------------------------
+def _get_teacher_oid(current_user: dict) -> ObjectId:
+    if current_user.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Only teachers can access analytics")
+
+    try:
+        return ObjectId(current_user["id"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid user ID")
+
+
+async def _get_teacher_subjects(teacher_oid: ObjectId) -> list[dict]:
+    subjects_cursor = db.subjects.find(
+        {"professor_ids": teacher_oid},
+        {"_id": 1, "name": 1, "code": 1},
+    )
+    return await subjects_cursor.to_list(length=1000)
+
+
+async def _verify_teacher_class_access(teacher_oid: ObjectId, class_oid: ObjectId) -> None:
+    subject = await db.subjects.find_one(
+        {"_id": class_oid, "professor_ids": teacher_oid},
+        {"_id": 1},
+    )
+    if not subject:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have access to this class",
+        )
+
+
+# -------------------------------------------------------------------------
+# ENDPOINTS
+# -------------------------------------------------------------------------
+
 @router.get("/subject/{subject_id}", response_model=SubjectStatsResponse)
 async def get_subject_analytics(
     subject_id: str,
@@ -108,8 +145,7 @@ async def get_subject_analytics(
     # Best: High score desc
     best_performing = sorted(stats_list, key=lambda x: x.score, reverse=True)[:5]
 
-    # Needs Support: Low score asc but only those < 75% maybe?
-    # Or just lowest performers regardless of threshold for the list
+    # Needs Support: Low score asc
     needs_support = sorted(stats_list, key=lambda x: x.score)[:5]
 
     return SubjectStatsResponse(
@@ -127,12 +163,15 @@ async def get_attendance_trend(
     classId: str = Query(..., description="Class/Subject ID"),
     dateFrom: str = Query(..., description="Start date (YYYY-MM-DD)"),
     dateTo: str = Query(..., description="End date (YYYY-MM-DD)"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get attendance trend for a specific class within a date range.
-
     Returns daily attendance data including present, absent, late counts and percentage.
     """
+    # 1. Auth Check (from 304)
+    teacher_oid = _get_teacher_oid(current_user)
+
     # Validate dates
     try:
         start_date = datetime.fromisoformat(dateFrom)
@@ -151,9 +190,12 @@ async def get_attendance_trend(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid classId format")
 
-    # Query attendance_daily collection - Single document per subject
+    # 2. Ownership Check (from 304)
+    await _verify_teacher_class_access(teacher_oid, class_oid)
+
+    # 3. Data Retrieval (from main - assumes single doc with 'daily' map schema)
     doc = await db.attendance_daily.find_one({"subjectId": class_oid})
-    
+
     trend_data = []
 
     if doc and "daily" in doc:
@@ -191,23 +233,34 @@ async def get_monthly_summary(
     classId: Optional[str] = Query(
         None, description="Optional class/subject ID filter"
     ),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get monthly attendance summary aggregated by month.
-
     Can be filtered by classId or return all classes.
     """
+    # 1. Auth & Get Subjects (from 304)
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
+    subject_ids = [subject["_id"] for subject in subjects]
+
+    if not subject_ids:
+        return {"data": []}
+
     # Build match filter
-    match_filter = {}
+    # Use 'subjectId' for DB match (from main schema), but check auth using 304 logic
+    match_filter = {"subjectId": {"$in": subject_ids}}
+    
     if classId:
         try:
             class_oid = ObjectId(classId)
+            # Verify explicit access if specific class requested (from 304)
+            await _verify_teacher_class_access(teacher_oid, class_oid)
             match_filter["subjectId"] = class_oid
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid classId format")
 
-    # Aggregate by month
-    # New logic: Unwind 'daily' map -> group by month
+    # 2. Aggregate Pipeline (from main - handles 'daily' map unwinding)
     pipeline = [
         {"$match": match_filter},
         # Ensure only documents with 'daily' field are processed
@@ -291,15 +344,25 @@ async def get_monthly_summary(
 
 
 @router.get("/class-risk")
-async def get_class_risk():
+async def get_class_risk(
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get classes at risk (attendance percentage < 75%).
-
     Returns classes with low attendance rates that need attention.
     """
-    # Aggregate to get overall percentage per class
+    # 1. Auth & Scope (from 304)
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
+    subject_ids = [subject["_id"] for subject in subjects]
+
+    if not subject_ids:
+        return {"data": []}
+
+    # 2. Pipeline (from main - 'subjectId' match + 'daily' map unwinding)
     pipeline = [
-         # Convert daily map to array
+        {"$match": {"subjectId": {"$in": subject_ids}}},
+        # Convert daily map to array
         {
             "$project": {
                 "classId": "$subjectId", 
@@ -360,8 +423,8 @@ async def get_class_risk():
     subjects_cursor = db.subjects.find(
         {"_id": {"$in": class_ids}}, {"name": 1, "code": 1}
     )
-    subjects = await subjects_cursor.to_list(length=1000)
-    subject_map = {str(s["_id"]): s for s in subjects}
+    subjects_list = await subjects_cursor.to_list(length=1000)
+    subject_map = {str(s["_id"]): s for s in subjects_list}
 
     # Format response
     at_risk_classes = []
@@ -392,32 +455,11 @@ async def get_global_stats(
 ):
     """
     Get aggregated statistics for the logged-in teacher.
-
-    Returns:
-        - overall_attendance: Average attendance across all teacher's subjects
-        - risk_count: Number of subjects with attendance < 75%
-        - top_subjects: List of subjects sorted by attendance percentage (descending)
     """
-    # Ensure user is a teacher
-    if current_user.get("role") != "teacher":
-        raise HTTPException(
-            status_code=403, detail="Only teachers can access global statistics"
-        )
-
-    # Get teacher's user ID
-    try:
-        teacher_oid = ObjectId(current_user["id"])
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
-
-    # Query all subjects where teacher_id matches current user
-    subjects_cursor = db.subjects.find(
-        {"professor_ids": teacher_oid}, {"_id": 1, "name": 1, "code": 1}
-    )
-    subjects = await subjects_cursor.to_list(length=1000)
+    teacher_oid = _get_teacher_oid(current_user)
+    subjects = await _get_teacher_subjects(teacher_oid)
 
     if not subjects:
-        # No subjects for this teacher
         return {
             "overall_attendance": 0.0,
             "risk_count": 0,
@@ -485,7 +527,7 @@ async def get_global_stats(
 
     # Build stats for subjects with attendance data
     subject_stats = []
-    stats_by_id = {}
+    # stats_by_id = {} # Unused variable removed
     total_percentage = 0.0
     risk_count = 0
 
@@ -504,7 +546,7 @@ async def get_global_stats(
             "totalStudents": result["totalStudents"],
         }
         subject_stats.append(stat)
-        stats_by_id[class_id_str] = stat
+        # stats_by_id[class_id_str] = stat
         total_percentage += attendance_pct
         if attendance_pct < 75:
             risk_count += 1
@@ -513,9 +555,7 @@ async def get_global_stats(
     # Re-sort by attendancePercentage descending
     subject_stats.sort(key=lambda x: x["attendancePercentage"], reverse=True)
 
-    # Recompute overall_attendance (unweighted average of all subjects,
-    # including 0% subjects)
-    # Note: Each subject contributes equally regardless of student count
+    # Recompute overall_attendance
     overall_attendance = (
         round(total_percentage / len(subject_stats), 2) if subject_stats else 0.0
     )
