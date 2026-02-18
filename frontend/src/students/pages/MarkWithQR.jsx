@@ -14,7 +14,6 @@ import {
 import api from "../../api/axiosClient";
 import QRScanner from "../components/QRScanner";
 import LivenessCheck from "../components/LivenessCheck";
-import DeviceBindingOTPModal from "../../components/DeviceBindingOTPModal";
 
 export default function MarkWithQR() {
     const navigate = useNavigate();
