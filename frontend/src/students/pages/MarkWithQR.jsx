@@ -8,15 +8,20 @@ import {
     MapPin,
     QrCode,
     ShieldCheck,
-    Navigation
+    Navigation,
+    UserCheck // Newly imported icon
 } from "lucide-react";
 import api from "../../api/axiosClient";
 import QRScanner from "../components/QRScanner";
+import LivenessCheck from "../components/LivenessCheck"; // Import new component
 
 export default function MarkWithQR() {
     const navigate = useNavigate();
     const [showScanner, setShowScanner] = useState(false);
-    const [status, setStatus] = useState("idle"); // idle, scanning, geolocating, submitting, success, error
+    const [showLiveness, setShowLiveness] = useState(false); // New state for Liveness UI
+    const [qrToken, setQrToken] = useState(null); // Store token while waiting for liveness
+
+    const [status, setStatus] = useState("idle"); // idle, scanning, liveness, geolocating, submitting, success, error
     const [errorMsg, setErrorMsg] = useState("");
 
     const startScanning = () => {
@@ -27,9 +32,21 @@ export default function MarkWithQR() {
 
     const handleScanSuccess = async (decodedText) => {
         setShowScanner(false);
-        setStatus("geolocating");
+        setQrToken(decodedText);
 
-        // Step 2: Capture Geolocation
+        // Move to Liveness Check
+        setStatus("liveness");
+        setShowLiveness(true);
+    };
+
+    const handleLivenessSuccess = () => {
+        setShowLiveness(false);
+        setStatus("geolocating");
+        startGeolocation(qrToken);
+    };
+
+    const startGeolocation = (token) => {
+        // Step 3: Capture Geolocation
         if (!navigator.geolocation) {
             setStatus("error");
             setErrorMsg("Geolocation is not supported by your browser.");
@@ -39,7 +56,7 @@ export default function MarkWithQR() {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-                await submitAttendance(decodedText, latitude, longitude);
+                await submitAttendance(token, latitude, longitude);
             },
             (error) => {
                 setStatus("error");
@@ -127,9 +144,9 @@ export default function MarkWithQR() {
                                 </div>
                                 <div className="flex flex-col items-center gap-2">
                                     <div className="w-12 h-12 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)]/40 shadow-sm flex items-center justify-center text-[var(--text-body)]/80">
-                                        <MapPin size={20} />
+                                        <UserCheck size={20} />
                                     </div>
-                                    <span className="text-[10px] font-bold text-[var(--text-body)]/80">In Class</span>
+                                    <span className="text-[10px] font-bold text-[var(--text-body)]/80">Liveness Test</span>
                                 </div>
                             </div>
                         </div>
@@ -219,6 +236,17 @@ export default function MarkWithQR() {
                         onClose={() => {
                             setShowScanner(false);
                             setStatus("idle");
+                        }}
+                    />
+                )}
+
+                {showLiveness && (
+                    <LivenessCheck
+                        onSuccess={handleLivenessSuccess}
+                        onFailure={() => {
+                            setShowLiveness(false);
+                            setStatus("error");
+                            setErrorMsg("Liveness check failed. Please try again.");
                         }}
                     />
                 )}
