@@ -50,6 +50,12 @@ export const LANDMARKS = {
 
 // Detect Head Turn (Yaw)
 // Returns: 'left', 'right', 'center'
+//
+// In mirrored mode (default for webcam), the screen image is horizontally flipped.
+// When the user turns their head LEFT (their left), their nose moves toward the right
+// cheek in screen coordinates, so distToRight decreases and the ratio increases (> 1.6).
+// When the user turns their head RIGHT (their right), their nose moves toward the left
+// cheek in screen coordinates, so distToLeft decreases and the ratio decreases (< 0.6).
 export const detectHeadTurn = (landmarks) => {
     const nose = landmarks[LANDMARKS.NOSE_TIP];
     const leftCheek = landmarks[LANDMARKS.LEFT_CHEEK];
@@ -58,20 +64,13 @@ export const detectHeadTurn = (landmarks) => {
     const distToLeft = Math.abs(nose.x - leftCheek.x);
     const distToRight = Math.abs(nose.x - rightCheek.x);
 
-    const ratio = distToLeft / (distToRight + 0.0001); // Avoid div by zero
+    // If either distance is zero the face mesh data is degenerate — treat as center
+    if (distToLeft === 0 || distToRight === 0) return 'center';
 
-    // Thresholds need calibration, but generally:
-    // Ratio < 0.6 => Turning Left (Nose closer to left cheek in 2D projection? No, wait.)
-    // If user turns LEFT (their left), nose moves LEFT in image (viewer's left? No, mirrored?).
-    // Usually mirrored=true.
-    // If mirrored:
-    // Turn Left (User's left) -> Face looks to right of screen. Nose moves towards right cheek (454).
-    //  distToRight gets smaller. Ratio gets larger.
-    // Turn Right (User's right) -> Face looks to left of screen. Nose moves towards left cheek (234).
-    //  distToLeft gets smaller. Ratio gets smaller.
+    const ratio = distToLeft / distToRight;
 
     if (ratio < 0.6) return 'right'; // User looking to their right (screen left)
-    if (ratio > 1.6) return 'left'; // User looking to their left (screen right)
+    if (ratio > 1.6) return 'left';  // User looking to their left (screen right)
     return 'center';
 };
 

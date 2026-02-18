@@ -31,8 +31,9 @@ const ACTION_POOL = ['blink', 'turn-left', 'turn-right', 'smile'];
  *
  * @param {Object} props
  * @param {Function} props.onSuccess - Called when liveness is verified
+ * @param {Function} props.onFailure - Called when liveness fails or camera is unavailable
  */
-export default function LivenessCheck({ onSuccess }) {
+export default function LivenessCheck({ onSuccess, onFailure }) {
     const webcamRef = useRef(null);
     const cameraRef = useRef(null);
 
@@ -49,11 +50,14 @@ export default function LivenessCheck({ onSuccess }) {
     const blinkCounter = useRef(0);
     const lastActionTime = useRef(0);
     const onSuccessRef = useRef(onSuccess);
+    const onFailureRef = useRef(onFailure);
+    const timerRef = useRef(null); // Store timer ref to prevent race condition on unmount
 
     // Keep refs in sync with state/props
     useEffect(() => { statusRef.current = status; }, [status]);
     useEffect(() => { currentActionRef.current = currentAction; }, [currentAction]);
     useEffect(() => { onSuccessRef.current = onSuccess; }, [onSuccess]);
+    useEffect(() => { onFailureRef.current = onFailure; }, [onFailure]);
 
     const pickNextAction = useCallback(() => {
         const completed = actionsCompletedRef.current;
@@ -148,10 +152,16 @@ export default function LivenessCheck({ onSuccess }) {
 
     // Initialize MediaPipe FaceMesh once — stable because onResults/pickNextAction are stable
     useEffect(() => {
-        const faceMesh = new FaceMesh({
-            locateFile: (file) =>
-                `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-        });
+        let faceMesh;
+        try {
+            faceMesh = new FaceMesh({
+                locateFile: (file) =>
+                    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            });
+        } catch {
+            onFailureRef.current?.();
+            return;
+        }
 
         faceMesh.setOptions({
             maxNumFaces: 1,
@@ -164,11 +174,18 @@ export default function LivenessCheck({ onSuccess }) {
 
         // Wait for webcam video element to be ready
         const initCamera = () => {
-            if (webcamRef.current && webcamRef.current.video) {
+            // Guard: component may have unmounted before timer fired
+            if (!webcamRef.current) return;
+            if (webcamRef.current.video) {
                 const camera = new Camera(webcamRef.current.video, {
                     onFrame: async () => {
                         if (webcamRef.current?.video?.readyState === 4) {
-                            await faceMesh.send({ image: webcamRef.current.video });
+                            try {
+                                await faceMesh.send({ image: webcamRef.current.video });
+                            } catch {
+                                // Model load or inference failure — surface to parent
+                                onFailureRef.current?.();
+                            }
                         }
                     },
                     width: 640,
@@ -180,10 +197,12 @@ export default function LivenessCheck({ onSuccess }) {
         };
 
         // Webcam may not be ready immediately — poll briefly
-        const timer = setTimeout(initCamera, 500);
+        timerRef.current = setTimeout(initCamera, 500);
 
         return () => {
-            clearTimeout(timer);
+            // Clear timer first to prevent initCamera from running after unmount
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
             if (cameraRef.current) {
                 cameraRef.current.stop();
             }
@@ -272,7 +291,7 @@ export default function LivenessCheck({ onSuccess }) {
                             </div>
                             <p className="text-xs text-[var(--text-body)]">We could not verify your liveness. Please try again.</p>
                             <button
-                                onClick={() => window.location.reload()}
+                                onClick={() => onFailure?.()}
                                 className="px-6 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-bold hover:bg-[var(--bg-secondary)] transition"
                             >
                                 Retry
@@ -284,6 +303,12 @@ export default function LivenessCheck({ onSuccess }) {
                         <div className="p-4 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-2xl text-center text-[var(--danger)]">
                             <p className="font-bold">Camera Access Denied</p>
                             <p className="text-xs mt-1">Please enable camera access to continue.</p>
+                            <button
+                                onClick={() => onFailure?.()}
+                                className="mt-3 px-6 py-2 bg-[var(--bg-card)] border border-[var(--danger)]/30 rounded-lg text-sm font-bold hover:bg-[var(--bg-secondary)] transition"
+                            >
+                                Go Back
+                            </button>
                         </div>
                     )}
                 </div>

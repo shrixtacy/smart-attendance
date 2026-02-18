@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -14,7 +14,7 @@ import {
 import api from "../../api/axiosClient";
 import QRScanner from "../components/QRScanner";
 import LivenessCheck from "../components/LivenessCheck";
-import DeviceBindingOTPModal from "../../components/DeviceBindingOTPModal";
+import DeviceBindingOTPModal from "../../components/DeviceBindingOtpModal";
 
 export default function MarkWithQR() {
     const navigate = useNavigate();
