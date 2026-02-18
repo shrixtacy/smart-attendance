@@ -128,8 +128,7 @@ async def mark_attendance(request: Request, payload: Dict):
     payload:
     {
       "image": "data:image/jpeg;base64,...",
-      "subject_id": "...",
-      "device_id": "unique-device-uuid"
+      "subject_id": "..."
     }
 
     headers:
