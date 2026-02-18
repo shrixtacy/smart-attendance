@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { 
   Bell, 
@@ -60,16 +60,6 @@ export default function StudentDashboard() {
     day: "numeric",
     month: "long"
   });
-
-  const [username] = useState(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored).name : "";
-    } catch {
-      return "";
-    }
-  });
-
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col md:flex-row font-sans text-[var(--text-main)]">
