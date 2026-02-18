@@ -89,7 +89,7 @@ export default function StudentSubjects() {
     try {
       const data = await fetchAvailableSubjects();
       setAvailableSubjects(data);
-    } catch (err) {
+    } catch {
       toast.error(t("subjects.enroll_fetch_error"));
     } finally {
       setLoadingAvailable(false);
@@ -102,7 +102,7 @@ export default function StudentSubjects() {
       toast.success(t("subjects.enroll_success"));
       setShowEnrollModal(false);
       loadData(); // Refresh list
-    } catch (err) {
+    } catch {
       toast.error(t("subjects.enroll_error"));
     }
   };

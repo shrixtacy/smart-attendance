@@ -13,7 +13,7 @@ from app.services import schedule_service
 from datetime import datetime
 import pytz
 import os
-from typing import List
+# from typing import List
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -40,13 +40,23 @@ async def api_get_my_today_schedule(current_user: dict = Depends(get_current_use
         school_tz = pytz.timezone(timezone_str)
     except pytz.UnknownTimeZoneError:
         school_tz = pytz.timezone("Asia/Kolkata")
-    
-    days_of_week = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    days_of_week = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
     now_in_school_tz = datetime.now(school_tz)
     current_day = days_of_week[now_in_school_tz.weekday()]
 
-    entries = await schedule_service.get_student_schedule_for_day(str_subject_ids, current_day)
-    
+    entries = await schedule_service.get_student_schedule_for_day(
+        str_subject_ids, current_day
+    )
+
     # Process entries for frontend
     schedule_list = []
     for entry in entries:

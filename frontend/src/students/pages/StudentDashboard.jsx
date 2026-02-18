@@ -25,6 +25,11 @@ export default function StudentDashboard() {
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
 
+  // Force re-render to update relative time
+  useEffect(() => {
+    void tick; 
+  }, [tick]);
+
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
   };
