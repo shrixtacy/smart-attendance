@@ -180,10 +180,13 @@ export default function LivenessCheck({ onSuccess }) {
         };
 
         // Webcam may not be ready immediately — poll briefly
-        const timer = setTimeout(initCamera, 500);
+        let timer = setTimeout(initCamera, 500);
 
         return () => {
-            clearTimeout(timer);
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
             if (cameraRef.current) {
                 cameraRef.current.stop();
             }
