@@ -40,7 +40,7 @@ def _parse_object_id(value: str, field_name: str) -> ObjectId:
         raise HTTPException(status_code=400, detail=f"{field_name} is required")
     try:
         return ObjectId(value)
-    except Exception:
+    except bson_errors.InvalidId:
         raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
 
 
@@ -68,7 +68,7 @@ def _parse_object_id_list(
             oid = ObjectId(val)
             oid_list.append(oid)
             oid_set.add(oid)
-        except Exception:
+        except bson_errors.InvalidId:
             raise HTTPException(
                 status_code=400, detail=f"Invalid ObjectId in {field_name}: {val}"
             )

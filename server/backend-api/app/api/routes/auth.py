@@ -4,6 +4,7 @@ from authlib.integrations.starlette_client import OAuth
 from datetime import datetime, timedelta, UTC, timezone
 import secrets
 import os
+import jwt
 from bson import ObjectId
 from app.utils.jwt_token import (
     create_access_token,
@@ -855,7 +856,10 @@ async def logout(request: Request):
         token = auth_header.split(" ")[1]
         decoded = decode_jwt(token)
         user_id = decoded.get("user_id")
-    except Exception:
+    except (jwt.DecodeError, jwt.ExpiredSignatureError) as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {type(e).__name__}")
+    except Exception as e:
+        logger.error("Unexpected error during token decode: %s", e)
         raise HTTPException(status_code=401, detail="Invalid token")
 
     # Update last logout time

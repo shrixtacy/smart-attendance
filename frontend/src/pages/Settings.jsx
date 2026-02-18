@@ -185,8 +185,10 @@ export default function Settings() {
     try {
       await apiLogout();
     } catch (error) {
-      console.error("Logout API call failed:", error);
-      // Continue with logout even if API fails
+      // Log error for debugging but continue with logout
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Logout API call failed:", error);
+      }
     } finally {
       localStorage.removeItem("token");
       localStorage.removeItem("user");

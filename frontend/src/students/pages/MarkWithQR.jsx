@@ -23,13 +23,16 @@ export default function MarkWithQR() {
     const [userEmail, setUserEmail] = useState("");
     const [pendingAttendanceData, setPendingAttendanceData] = useState(null);
 
+    // Device binding state validity: 5 minutes in milliseconds
+    const DEVICE_BINDING_STATE_VALIDITY_MS = 5 * 60 * 1000;
+
     // Check if device binding is required on mount
     useEffect(() => {
         const deviceBindingState = sessionStorage.getItem("deviceBindingRequired");
         if (deviceBindingState) {
             const { timestamp } = JSON.parse(deviceBindingState);
             // Show modal if the error was recent (within last 5 minutes)
-            if (Date.now() - timestamp < 5 * 60 * 1000) {
+            if (Date.now() - timestamp < DEVICE_BINDING_STATE_VALIDITY_MS) {
                 const user = JSON.parse(localStorage.getItem("user") || "{}");
                 setUserEmail(user.email || "");
                 setShowDeviceBindingModal(true);
