@@ -267,48 +267,57 @@ async def mark_attendance(request: Request, payload: Dict):
         token = auth_header.split(" ")[1]
         decoded = decode_jwt(token)
         user_id = decoded.get("user_id")
+        user_role = decoded.get("role")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    # Check device binding
-    try:
-        user = await db.users.find_one({"_id": ObjectId(user_id)})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
+    # Check device binding - ONLY for students
+    # Teachers and admins are exempt from device binding
+    if user_role == "student":
+        try:
+            user = await db.users.find_one({"_id": ObjectId(user_id)})
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
 
-        trusted_device_id = user.get("trusted_device_id")
+            trusted_device_id = user.get("trusted_device_id")
 
-        # Case A: First time (no trusted device set) - Auto-bind and allow
-        if not trusted_device_id:
-            logger.info(
-                "First-time device detected for user %s: %s. Auto-binding device.",
-                user_id,
-                device_id,
-            )
-            await db.users.update_one(
-                {"_id": ObjectId(user_id)},
-                {"$set": {"trusted_device_id": device_id}},
-            )
-        # Case B: Device matches
-        elif trusted_device_id == device_id:
-            logger.debug("Device match for user %s", user_id)
-        # Case C: Device mismatch - Require OTP verification
-        else:
-            logger.warning(
-                "Device mismatch for user %s. Trusted: %s, Current: %s",
-                user_id,
-                trusted_device_id,
-                device_id,
-            )
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "New device detected. "
-                    "Please verify with OTP sent to your email."
-                ),
-            )
-    except bson_errors.InvalidId:
-        raise HTTPException(status_code=400, detail="Invalid user ID")
+            # Case A: First time (no trusted device set) - Auto-bind and allow
+            if not trusted_device_id:
+                logger.info(
+                    "First-time device detected for user %s: %s. Auto-binding device.",
+                    user_id,
+                    device_id,
+                )
+                await db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"trusted_device_id": device_id}},
+                )
+            # Case B: Device matches
+            elif trusted_device_id == device_id:
+                logger.debug("Device match for user %s", user_id)
+            # Case C: Device mismatch - Require OTP verification
+            else:
+                logger.warning(
+                    "Device mismatch for user %s. Trusted: %s, Current: %s",
+                    user_id,
+                    trusted_device_id,
+                    device_id,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "New device detected. "
+                        "Please verify with OTP sent to your email."
+                    ),
+                )
+        except bson_errors.InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+    else:
+        logger.debug(
+            "Skipping device binding check for non-student user %s with role: %s",
+            user_id,
+            user_role,
+        )
 
     image_b64 = payload.get("image")
     subject_id = payload.get("subject_id")
