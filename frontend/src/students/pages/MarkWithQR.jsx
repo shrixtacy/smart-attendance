@@ -50,6 +50,22 @@ export default function MarkWithQR() {
         setShowScanner(false);
         setStatus("geolocating");
 
+        // Parse QR code JSON
+        let qrData;
+        try {
+            qrData = JSON.parse(decodedText);
+            // Validate required fields
+            if (!qrData.subjectId || !qrData.date || !qrData.sessionId || !qrData.token) {
+                setStatus("error");
+                setErrorMsg("Invalid QR code format. Please scan a valid attendance QR code.");
+                return;
+            }
+        } catch (e) {
+            setStatus("error");
+            setErrorMsg("Invalid QR code. Please scan a valid attendance QR code.");
+            return;
+        }
+
         // Step 2: Capture Geolocation
         if (!navigator.geolocation) {
             setStatus("error");
@@ -60,7 +76,7 @@ export default function MarkWithQR() {
         navigator.geolocation.getCurrentPosition(
             async (position) => {
                 const { latitude, longitude } = position.coords;
-                await submitAttendance(decodedText, latitude, longitude);
+                await submitAttendance(qrData, latitude, longitude);
             },
             (error) => {
                 setStatus("error");
@@ -83,11 +99,14 @@ export default function MarkWithQR() {
         );
     };
 
-    const submitAttendance = async (token, lat, lng) => {
+    const submitAttendance = async (qrData, lat, lng) => {
         setStatus("submitting");
         try {
             await api.post("/api/attendance/mark-qr", {
-                token,
+                subjectId: qrData.subjectId,
+                date: qrData.date,
+                sessionId: qrData.sessionId,
+                token: qrData.token,
                 latitude: lat,
                 longitude: lng,
             });

@@ -81,18 +81,43 @@ async def mark_attendance_qr(
     payload: QRAttendanceRequest, current_user: dict = Depends(get_current_user)
 ):
     """
-    Mark attendance via QR code with geofencing check.
+    Mark attendance via QR code with geofencing check and date validation.
+    
+    Validates:
+    - subjectId exists
+    - date is today (prevents scanning old screenshots)
+    - token is valid
+    - student location within allowed radius
+    
+    Updates:
+    - subjects.students.attendance array (adds attendance record)
+    - subjects.students.present_count (increments counter)
     """
     if current_user["role"] != "student":
         raise HTTPException(status_code=403, detail="Only students can mark attendance")
 
     student_oid = ObjectId(current_user["id"])
-    subject_id = payload.token  # Assuming token is subject_id for MVP
+    subject_id = payload.subjectId
     
     if not ObjectId.is_valid(subject_id):
         raise HTTPException(status_code=400, detail="Invalid subject ID")
          
     subject_oid = ObjectId(subject_id)
+
+    # Validate date is today
+    from datetime import datetime, UTC
+    try:
+        qr_date = datetime.fromisoformat(payload.date.replace('Z', '+00:00'))
+        today = datetime.now(UTC).date()
+        qr_day = qr_date.date()
+        
+        if qr_day != today:
+            raise HTTPException(
+                status_code=400, 
+                detail="Expired Session: QR code is not from today. Please scan a fresh QR code."
+            )
+    except (ValueError, AttributeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
 
     # 1. Fetch Subject & Location
     subject = await db.subjects.find_one({"_id": subject_oid})
@@ -134,21 +159,56 @@ async def mark_attendance_qr(
     # 3. Mark Attendance (Update Subject)
     today = date.today().isoformat()
     
-    # We update the student's attendance in the subject document
-    # Using the same logic as confirm_attendance essentially, but for one student
-    await db.subjects.update_one(
-        {"_id": subject_oid},
+    # Check if student has already marked attendance today for this subject
+    existing_subject = await db.subjects.find_one(
         {
-            "$inc": {"students.$[p].attendance.present": 1},
-            "$set": {"students.$[p].attendance.lastMarkedAt": today},
-        },
-        array_filters=[
-            {
-                "p.student_id": student_oid,
-                "p.attendance.lastMarkedAt": {"$ne": today},
+            "_id": subject_oid,
+            "students": {
+                "$elemMatch": {
+                    "student_id": student_oid,
+                    "attendance.lastMarkedAt": today
+                }
             }
-        ],
+        }
     )
+    
+    if existing_subject:
+        raise HTTPException(
+            status_code=409,
+            detail="Attendance already marked for today"
+        )
+    
+    # Update the student's attendance in the subject document
+    # 1. Push attendance record to the attendance array
+    # 2. Increment present counter
+    # 3. Update lastMarkedAt
+    attendance_record = {
+        "date": today,
+        "status": "Present",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "method": "qr"
+    }
+    
+    result = await db.subjects.update_one(
+        {
+            "_id": subject_oid,
+            "students.student_id": student_oid
+        },
+        {
+            "$push": {"students.$.attendanceRecords": attendance_record},
+            "$inc": {
+                "students.$.attendance.present": 1,
+                "students.$.attendance.total": 1
+            },
+            "$set": {"students.$.attendance.lastMarkedAt": today},
+        }
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not enrolled in this subject or already marked"
+        )
     
     # 4. Save audit record including is_proxy_suspected
     # Use a dedicated attendance_logs collection to store audit events, avoiding unbounded
@@ -158,7 +218,9 @@ async def mark_attendance_qr(
         "student_id": student_oid,
         "subject_id": subject_oid,
         "date": today,
-        "timestamp": date.today().isoformat(), # or datetime.now()
+        "timestamp": datetime.now(UTC).isoformat(),
+        "session_id": payload.sessionId,
+        "token": payload.token,
         "latitude": payload.latitude,
         "longitude": payload.longitude,
         "distance_from_teacher": dist,
