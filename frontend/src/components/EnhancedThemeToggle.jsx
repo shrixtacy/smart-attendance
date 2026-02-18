@@ -36,10 +36,10 @@ export default function EnhancedThemeToggle({ position = "default" }) {
 
   const positionClasses = position === "absolute" 
     ? "absolute top-4 right-4 z-50" 
-    : "";
+    : "relative";
 
   return (
-    <div className={`relative ${positionClasses}`} ref={dropdownRef}>
+    <div className={positionClasses} ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-secondary)]/80 border border-[var(--border-color)] transition text-sm shadow-sm"
