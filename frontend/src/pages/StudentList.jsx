@@ -22,10 +22,6 @@ export default function StudentList() {
   const [sortOrder, setSortOrder] = useState("desc"); // "asc" or "desc"
   const navigate = useNavigate();
 
-  // Simulating the fetch call you had
-  // useEffect(() => {
-  //   fetchMySubjects().then(setSubjects);
-  // }, []);
   useEffect(() => {
     fetchMySubjects()
       .then(setSubjects)
