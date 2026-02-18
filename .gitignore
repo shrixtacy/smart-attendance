@@ -15,6 +15,7 @@ Thumbs.db
 server/.venv/
 server/venv/
 server/backend-api/.venv/
+server/backend-api/venv/
 server/ml-service/.venv/
 server/__pycache__/
 server/**/*.pyc
@@ -26,6 +27,11 @@ server/.mypy_cache/
 server/.ruff_cache/
 server/**/.coverage
 server/**/htmlcov/
+
+# ML Models (downloaded at build/runtime)
+# Note: blaze_face_short_range.tflite is downloaded by download_models.py
+# DO NOT commit large model files - they should be fetched during deployment
+server/ml-service/app/ml/*.tflite
 
 # ENV FILES (NEVER COMMIT)
 server/.env

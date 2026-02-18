@@ -1,17 +1,17 @@
-import { Navigate, useLocation } from "react-router-dom";
+import React from "react";
+import { Navigate } from "react-router-dom";
+import PropTypes from "prop-types";
 
-const ProtectedRoute = ({ children }) => {
+export default function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
-  // const storedUser = localStorage.getItem("user");
-  // const user = storedUser ? JSON.parse(storedUser) : null;
-  const location = useLocation();
 
-  // 1. If no token or user, redirect to login
   if (!token) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;
-};
+}
 
-export default ProtectedRoute;
+ProtectedRoute.propTypes = {
+  children: PropTypes.node.isRequired,
+};

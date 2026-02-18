@@ -19,6 +19,9 @@ import {
   Cell
 } from "recharts";
 import { useTranslation } from "react-i18next";
+import { fetchSubjectAnalytics } from "../api/analytics";
+import { fetchMySubjects } from "../api/teacher";
+import Spinner from "../components/Spinner";
 
 // --- Mock Data ---
 
@@ -36,32 +39,30 @@ const DISTRIBUTION_DATA = [
   { name: 'Absent', value: 19, color: "var(--danger)" },  
 ];
 
-const CLASS_PERFORMANCE = [
+const GLOBAL_STATS = {
+  attendance: 89,
+  avgLate: 7,
+  riskCount: 3,
+  lateTime: '09:15 AM'
+};
+
+const GLOBAL_LEADERBOARD_BEST = [
   { name: 'Grade 9A', score: 91 },
   { name: 'Grade 10A', score: 88 },
   { name: 'Grade 8C', score: 86 },
 ];
 
-const CLASS_RISK = [
+const GLOBAL_LEADERBOARD_RISK = [
   { name: 'Grade 11C', score: 71 },
   { name: 'Grade 12B', score: 68 },
   { name: 'Grade 7D', score: 73 },
 ];
 
 const CLASS_BREAKDOWN = [
-  { class: 'Grade 10A', students: 32, present: 88, late: 7, absent: 5, color: 'emerald' },
-  { class: 'Grade 10B', students: 30, present: 82, late: 9, absent: 9, color: 'amber' },
-  { class: 'Grade 9A', students: 28, present: 91, late: 5, absent: 4, color: 'emerald' },
-  { class: 'Grade 11C', students: 29, present: 71, late: 11, absent: 18, color: 'red' },
-];
-
-// Mock subjects data
-const MOCK_SUBJECTS = [
-  { id: '1', name: 'Mathematics', code: 'MATH101' },
-  { id: '2', name: 'Physics', code: 'PHY201' },
-  { id: '3', name: 'Chemistry', code: 'CHEM201' },
-  { id: '4', name: 'Computer Science', code: 'CS301' },
-  { id: '5', name: 'English Literature', code: 'ENG101' },
+  { class: 'Grade 10A', students: 32, present: 88, late: 7, absent: 5, color: "var(--success)" },
+  { class: 'Grade 10B', students: 30, present: 82, late: 9, absent: 9, color: "var(--warning)" },
+  { class: 'Grade 9A', students: 28, present: 91, late: 5, absent: 4, color: "var(--success)" },
+  { class: 'Grade 11C', students: 29, present: 71, late: 11, absent: 18, color: "var(--danger)" },
 ];
 
 export default function Analytics() {
@@ -77,6 +78,12 @@ export default function Analytics() {
     "Month": t('analytics.chart.month'),
     "Semester": t('analytics.chart.semester')
   };
+
+  const [subjects, setSubjects] = useState([]);
+  const [stats, setStats] = useState(GLOBAL_STATS);
+  const [bestPerforming, setBestPerforming] = useState(GLOBAL_LEADERBOARD_BEST);
+  const [needingSupport, setNeedingSupport] = useState(GLOBAL_LEADERBOARD_RISK);
+  const [loading, setLoading] = useState(false);
 
   // Handle outside click to close dropdown
   useEffect(() => {
@@ -95,11 +102,74 @@ export default function Analytics() {
     };
   }, [isDropdownOpen]);
 
+  // Fetch subjects on mount
+  useEffect(() => {
+    fetchMySubjects()
+      .then(data => {
+        // Map _id to id to match expectation if needed, or just use _id
+        const mapped = data.map(s => ({ ...s, id: s._id }));
+        setSubjects(mapped);
+      })
+      .catch(console.error);
+  }, []);
+
   const handlePeriodChange = (period) => {
     setSelectedPeriod(period);
     setIsDropdownOpen(false);
     // TODO: Trigger data fetch when backend is ready
   };
+  
+  // Logic for dynamic stats based on selection
+  const isGlobal = selectedSubject === 'all';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAnalytics = async () => {
+      if (isGlobal) {
+        // Avoid synchronous state updates in effect
+        await Promise.resolve();
+        if (isMounted) {
+            setStats(GLOBAL_STATS);
+            setBestPerforming(GLOBAL_LEADERBOARD_BEST);
+            setNeedingSupport(GLOBAL_LEADERBOARD_RISK);
+        }
+      } else {
+        setLoading(true);
+        try {
+          const data = await fetchSubjectAnalytics(selectedSubject);
+            if (isMounted) {
+              setStats({
+                attendance: data.attendance || 0,
+                avgLate: data.avgLate || 0,
+                riskCount: data.riskCount || 0,
+                lateTime: data.lateTime || "N/A"
+              });
+              setBestPerforming(data.bestPerforming || []);
+              setNeedingSupport(data.needsSupport || []);
+            }
+        } catch (err) {
+            if (isMounted) {
+                 console.error("Failed to fetch analytics:", err);
+            }
+        } finally {
+            if(isMounted) setLoading(false);
+        }
+      }
+    };
+
+    loadAnalytics();
+
+    return () => { isMounted = false; };
+  }, [selectedSubject, isGlobal]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+        <Spinner />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
@@ -118,7 +188,7 @@ export default function Analytics() {
               className="px-4 py-2 bg-[var(--bg-card)] text-[var(--text-main)] border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
             >
               <option value="all">All Subjects</option>
-              {MOCK_SUBJECTS.map((subject) => (
+              {subjects.map((subject) => (
                 <option key={subject.id} value={subject.id}>
                   {subject.name} ({subject.code})
                 </option>
@@ -140,9 +210,11 @@ export default function Analytics() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Stat 1 */}
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.overall')}</p>
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.overall') : t('analytics.stats.class_attendance')}
+            </p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">89 <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.attendance} <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
             </div>
             <div className="flex items-center text-xs font-semibold text-[var(--success)]">
               <ArrowUpRight size={14} className="mr-1" />
@@ -154,21 +226,25 @@ export default function Analytics() {
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
             <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.avg_late')}</p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">7</h3>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.avgLate}</h3>
               <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.per_week')}</span>
             </div>
             <div className="flex items-center text-xs font-medium text-[var(--text-body)] opacity-70">
               <Clock size={14} className="mr-1" />
-              {t('analytics.stats.avg_time', {time: '09:15 AM'})}
+              {t('analytics.stats.avg_time', {time: stats.lateTime})}
             </div>
           </div>
 
           {/* Stat 3 */}
           <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
-            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.at_risk')}</p>
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.at_risk') : t('analytics.stats.students_at_risk')}
+            </p>
             <div className="flex items-end gap-3 mb-1">
-              <h3 className="text-4xl font-bold text-[var(--text-main)]">3</h3>
-              <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.sections')}</span>
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.riskCount}</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">
+                {isGlobal ? t('analytics.stats.sections') : t('analytics.stats.students_count')}
+              </span>
             </div>
             <div className="flex items-center text-xs font-semibold text-[var(--success)]">
                <span className="text-[var(--text-body)] mr-1">{t('analytics.stats.more_than_last_month')}</span>
@@ -284,10 +360,10 @@ export default function Analytics() {
               </div>
             </div>
             {/* Best Performing List */}
-            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm" data-testid="best-performing-list">
               <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.best')}</h3>
               <div className="space-y-3">
-                {CLASS_PERFORMANCE.map((c, i) => (
+                {bestPerforming.map((c, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-3">
                         <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
@@ -299,10 +375,10 @@ export default function Analytics() {
               </div>
             </div>
              {/* Needs Support List */}
-             <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
+             <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm" data-testid="needing-support-list">
               <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.needs_support')}</h3>
               <div className="space-y-3">
-                {CLASS_RISK.map((c, i) => (
+                {needingSupport.map((c, i) => (
                   <div key={i} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-3">
                         <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
@@ -330,14 +406,14 @@ export default function Analytics() {
                 {/* Progress Bar Container */}
                 <div className="h-4 w-full bg-[var(--bg-card)] rounded-full flex overflow-hidden shadow-inner mb-2">
                   <div 
-                    className={`h-full ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`} 
-                    style={{width: `${cls.present}%`}}
+                    className="h-full" 
+                    style={{width: `${cls.present}%`, backgroundColor: cls.color}}
                   ></div>
                   <div className="h-full bg-[var(--warning)]/40" style={{width: `${cls.late}%`}}></div>
                   <div className="h-full bg-[var(--danger)]/40" style={{width: `${cls.absent}%`}}></div>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                    <span className={`px-2 py-0.5 rounded text-[var(--text-on-primary)] font-bold ${cls.color === 'red' ? 'bg-[var(--danger)]' : cls.color === 'amber' ? 'bg-[var(--warning)]' : 'bg-[var(--success)]'}`}>
+                    <span className="px-2 py-0.5 rounded text-[var(--text-on-primary)] font-bold" style={{ backgroundColor: cls.color }}>
                       {t('analytics.breakdown.present_val', {val: cls.present})}
                     </span>
                     <span className="text-[var(--text-body)] opacity-80">

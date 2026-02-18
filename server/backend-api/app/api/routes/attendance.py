@@ -1,9 +1,10 @@
 import base64
 import logging
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Set, Tuple
 
 from bson import ObjectId
+from bson import errors as bson_errors
 from fastapi import APIRouter, HTTPException
 
 from geopy.distance import geodesic
@@ -14,6 +15,57 @@ from app.services.ml_client import ml_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
+
+
+def _parse_object_id(value: str, field_name: str) -> ObjectId:
+    if value is None:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+
+    if not isinstance(value, str) or not value.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must be a non-empty string",
+        )
+    try:
+        return ObjectId(value)
+    except (bson_errors.InvalidId, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
+
+
+def _parse_object_id_list(
+    values: List[str], field_name: str
+) -> Tuple[List[ObjectId], Set[str]]:
+    if not isinstance(values, list):
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} must be a list of strings",
+        )
+
+    parsed_ids: List[ObjectId] = []
+    unique_ids: Set[str] = set()
+
+    for idx, value in enumerate(values):
+        if not isinstance(value, str) or not value.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=f"{field_name}[{idx}] must be a non-empty string",
+            )
+        try:
+            oid = ObjectId(value)
+        except (bson_errors.InvalidId, TypeError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid ObjectId at {field_name}[{idx}]",
+            )
+
+        oid_str = str(oid)
+        if oid_str in unique_ids:
+            continue
+
+        unique_ids.add(oid_str)
+        parsed_ids.append(oid)
+
+    return parsed_ids, unique_ids
 
 
 @router.post("/mark")
@@ -66,7 +118,7 @@ async def mark_attendance(payload: Dict):
             class_pos = (float(location_cfg["lat"]), float(location_cfg["long"]))
             # Default radius 50m if not set
             allowed_radius = float(location_cfg.get("radius", 50))
-            
+
             if allowed_radius <= 0:
                 raise ValueError("Radius must be positive")
 
@@ -148,7 +200,9 @@ async def mark_attendance(payload: Dict):
         if not match_response.get("success"):
             raise HTTPException(
                 status_code=500,
-                detail=f"ML service error: {match_response.get('error', 'Unknown error')}",  # noqa: E501
+                detail=(
+                    f"ML service error: {match_response.get('error', 'Unknown error')}"
+                ),  # noqa: E501
             )
 
         matches = match_response.get("matches", [])
@@ -233,51 +287,100 @@ async def confirm_attendance(payload: Dict):
       "present_students": ["id1", "id2", ...],
       "absent_students": ["id3", "id4", ...]
     }
-    """
-    subject_id = payload.get("subject_id")
-    present_students: List[str] = payload.get("present_students", [])
-    absent_students: List[str] = payload.get("absent_students", [])
 
-    if not subject_id:
-        raise HTTPException(status_code=400, detail="subject_id required")
+    response:
+    - present_updated / absent_updated are counts of unique IDs submitted
+      after deduplication (not the count of DB rows modified).
+    """
+    subject_oid = _parse_object_id(payload.get("subject_id"), "subject_id")
+    present_oids, present_set = _parse_object_id_list(
+        payload.get("present_students", []), "present_students"
+    )
+    absent_oids, absent_set = _parse_object_id_list(
+        payload.get("absent_students", []), "absent_students"
+    )
+
+    overlap = present_set.intersection(absent_set)
+    if overlap:
+        raise HTTPException(
+            status_code=400,
+            detail="Students cannot be both present and absent",
+        )
+
+    subject = await db.subjects.find_one({"_id": subject_oid}, {"professor_ids": 1})
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
 
     today = date.today().isoformat()
-    subject_oid = ObjectId(subject_id)
-    present_oids = [ObjectId(sid) for sid in present_students]
-    absent_oids = [ObjectId(sid) for sid in absent_students]
 
-    # Mark PRESENT students
-    await db.subjects.update_one(
-        {"_id": subject_oid},
-        {
-            "$inc": {"students.$[p].attendance.present": 1},
-            "$set": {"students.$[p].attendance.lastMarkedAt": today},
-        },
-        array_filters=[
+    # Mark PRESENT students - increment total AND present
+    if present_oids:
+        await db.subjects.update_one(
+            {"_id": subject_oid},
             {
-                "p.student_id": {"$in": present_oids},
-                "p.attendance.lastMarkedAt": {"$ne": today},
-            }
-        ],
+                "$inc": {
+                    "students.$[p].attendance.total": 1,
+                    "students.$[p].attendance.present": 1,
+                },
+                "$set": {"students.$[p].attendance.lastMarkedAt": today},
+            },
+            array_filters=[
+                {
+                    "p.student_id": {"$in": present_oids},
+                    "p.attendance.lastMarkedAt": {"$ne": today},
+                }
+            ],
+        )
+
+    # Mark ABSENT students - increment total AND absent
+    if absent_oids:
+        await db.subjects.update_one(
+            {"_id": subject_oid},
+            {
+                "$inc": {
+                    "students.$[a].attendance.total": 1,
+                    "students.$[a].attendance.absent": 1,
+                },
+                "$set": {"students.$[a].attendance.lastMarkedAt": today},
+            },
+            array_filters=[
+                {
+                    "a.student_id": {"$in": absent_oids},
+                    "a.attendance.lastMarkedAt": {"$ne": today},
+                }
+            ],
+        )
+
+    # Update percentage for all modified students
+    # Fetch the subject to get updated student records
+    updated_subject = await db.subjects.find_one(
+        {"_id": subject_oid}, {"students": 1}
     )
 
-    # Mark ABSENT students
-    await db.subjects.update_one(
-        {"_id": subject_oid},
-        {
-            "$inc": {"students.$[a].attendance.absent": 1},
-            "$set": {"students.$[a].attendance.lastMarkedAt": today},
-        },
-        array_filters=[
-            {
-                "a.student_id": {"$in": absent_oids},
-                "a.attendance.lastMarkedAt": {"$ne": today},
-            }
-        ],
-    )
+    if updated_subject:
+        # Calculate and update percentages for students with attendance marked
+        all_modified_student_ids = present_oids + absent_oids
+        
+        for student in updated_subject.get("students", []):
+            student_id = student.get("student_id")
+            if student_id not in all_modified_student_ids:
+                continue
+            
+            attendance = student.get("attendance", {})
+            total = attendance.get("total", 0)
+            present = attendance.get("present", 0)
+            
+            # Calculate percentage
+            percentage = round((present / total) * 100, 2) if total > 0 else 0
+            
+            # Update percentage in database
+            await db.subjects.update_one(
+                {"_id": subject_oid, "students.student_id": student_id},
+                {"$set": {"students.$[s].attendance.percentage": percentage}},
+                array_filters=[{"s.student_id": student_id}],
+            )
 
     # --- Write daily attendance summary ---
-    subject = await db.subjects.find_one({"_id": subject_oid}, {"professor_ids": 1})
     teacher_id = (
         subject["professor_ids"][0]
         if subject and subject.get("professor_ids")
@@ -285,16 +388,15 @@ async def confirm_attendance(payload: Dict):
     )
 
     await save_daily_summary(
-        class_id=subject_oid,
         subject_id=subject_oid,
         teacher_id=teacher_id,
         record_date=today,
-        present=len(present_students),
-        absent=len(absent_students),
+        present=len(present_oids),
+        absent=len(absent_oids),
     )
 
     return {
         "ok": True,
-        "present_updated": len(present_students),
-        "absent_updated": len(absent_students),
+        "present_updated": len(present_oids),
+        "absent_updated": len(absent_oids),
     }

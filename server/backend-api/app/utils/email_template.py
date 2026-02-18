@@ -266,7 +266,12 @@ def absence_notification_template(
 
 
 def low_attendance_warning_template(
-    student_name: str, subject: str, attendance_percentage: float, threshold: int
+    student_name: str, 
+    subject: str, 
+    attendance_percentage: float, 
+    threshold: int,
+    present_count: int = 0,
+    total_count: int = 0
 ) -> str:
     """Generate HTML email for low attendance warning."""
     safe_student = html.escape(student_name)
@@ -293,7 +298,7 @@ def low_attendance_warning_template(
             </p>
             <div style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 20px; margin: 24px 0; border-radius: 6px;">
                 <p style="margin: 8px 0; color: #1F2937;"><strong>Subject:</strong> {safe_subject}</p>
-                <p style="margin: 8px 0; color: #1F2937;"><strong>Current Attendance:</strong> <span style="color: #DC2626; font-size: 24px; font-weight: 700;">{attendance_percentage:.1f}%</span></p>
+                <p style="margin: 8px 0; color: #1F2937;"><strong>Current Attendance:</strong> <span style="color: #DC2626; font-size: 24px; font-weight: 700;">{attendance_percentage:.1f}%</span> ({present_count}/{total_count} classes)</p>
                 <p style="margin: 8px 0; color: #1F2937;"><strong>Required Minimum:</strong> {threshold}%</p>
             </div>
             <div style="background-color: #DBEAFE; border-left: 4px solid #3B82F6; padding: 15px; margin: 20px 0; border-radius: 6px;">

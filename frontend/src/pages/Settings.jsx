@@ -27,6 +27,7 @@ import {
   patchSettings,
   uploadAvatar,
   addSubject,
+  sendLowAttendanceNotice,
 } from "../api/settings";
 import AddSubjectModal from "../components/AddSubjectModal";
 import { useTranslation } from "react-i18next";
@@ -47,10 +48,10 @@ export default function Settings() {
     const handleUp = () => setDragging(null);
     const handleMove = (e) => {
       if (!dragging || !sliderRef.current) return;
-      
+
       const rect = sliderRef.current.getBoundingClientRect();
       const percent = Math.min(Math.max(0, ((e.clientX - rect.left) / rect.width) * 100), 100);
-      
+
       if (dragging === 'warning') {
         const newVal = Math.round(percent);
         // Ensure warning doesn't cross safe
@@ -65,12 +66,12 @@ export default function Settings() {
         }
       }
     };
-    
+
     if (dragging) {
       window.addEventListener('mousemove', handleMove);
       window.addEventListener('mouseup', handleUp);
     }
-    
+
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
@@ -114,9 +115,52 @@ export default function Settings() {
     }
   }, [activeTab]);
 
+  // Handler to toggle email preferences
+  const toggleEmailPref = (key) => {
+    setEmailPreferences((prev) => {
+      // If array doesn't exist, create it
+      const currentPrefs = Array.isArray(prev) ? [...prev] : [];
+      const existingIndex = currentPrefs.findIndex((p) => p.key === key);
+
+      if (existingIndex >= 0) {
+        // Toggle existing
+        currentPrefs[existingIndex] = {
+          ...currentPrefs[existingIndex],
+          enabled: !currentPrefs[existingIndex].enabled
+        };
+      } else {
+        // Add new (default to true if adding, but logic suggests we are enabling it)
+        currentPrefs.push({ key, enabled: true });
+      }
+      return currentPrefs;
+    });
+  };
+
   // --- helper functions (inside your component) ---
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [sendingNotice, setSendingNotice] = useState(false);
+  const [noticeResult, setNoticeResult] = useState(null);
+
+  async function handleSendLowAttendanceNotice() {
+    setSendingNotice(true);
+    setNoticeResult(null);
+    try {
+      const res = await sendLowAttendanceNotice();
+      setNoticeResult({
+        success: true,
+        message: res.message || "Notices sent successfully",
+      });
+    } catch (err) {
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err.message ||
+        "Failed to send notices";
+      setNoticeResult({ success: false, message: errorMsg });
+    } finally {
+      setSendingNotice(false);
+    }
+  }
 
   // compute initials for avatar fallback
   function getInitials(name) {
@@ -130,9 +174,9 @@ export default function Settings() {
   const navigate = useNavigate();
 
   function handleLogout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  navigate("/login");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
   }
 
 
@@ -236,6 +280,7 @@ export default function Settings() {
             liveness,
             sensitivity,
           },
+          emailPreferences: _emailPreferences,
           theme,
         },
       };
@@ -302,15 +347,16 @@ export default function Settings() {
 
   if (loadError)
     return (
-      <div className="p-6 text-rose-600">
-        {t('settings.alerts.load_failed', {error: loadError})}
+      <div className="p-6 text-[var(--danger)]">
+        {t('settings.alerts.load_failed', { error: loadError })}
       </div>
     );
-  
+
   const emailPreferencesList = [
-      { key: "settings.general.email_daily", label: "Daily attendance summary" },
-      { key: "settings.general.email_critical", label: "Critical attendance alerts" },
-      { key: "settings.general.email_updates", label: "Product updates" },
+    { key: "settings.general.email_daily", label: "Daily attendance summary" },
+    { key: "settings.general.email_critical", label: "Critical attendance alerts" },
+    { key: "settings.general.email_updates", label: "Product updates" },
+    { key: "settings.general.email_low_attendance_automated", label: "Automated Monthly Low Attendance Alerts" },
   ];
 
   return (
@@ -319,7 +365,7 @@ export default function Settings() {
         {/* Page Header */}
         <div>
           <h2 className="text-2xl font-bold text-[var(--text-main)]">
-            {t('settings.title', {name: profile?.name || "User"})}
+            {t('settings.title', { name: profile?.name || "User" })}
           </h2>
           <p className="text-[var(--text-body)] opacity-90 mt-1">
             {t('settings.subtitle')}
@@ -327,7 +373,7 @@ export default function Settings() {
         </div>
 
         <div className="flex flex-col md:flex-row gap-8 items-start">
-          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab } onLogout={handleLogout}/>
+          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
 
           <div className="flex-1 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-8 w-full min-h-[600px]">
             {/* ================= GENERAL TAB ================= */}
@@ -352,11 +398,11 @@ export default function Settings() {
                       <button
                         key={mode}
                         onClick={() => setTheme(mode)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl border font-medium transition-all ${
-                          theme === mode
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                            : "border-[var(--border-color)] hover:bg-[var(--bg-hover)] text-[var(--text-body)]"
-                        }`}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-xl border font-medium transition-all ${theme === mode
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                          : "border-[var(--border-color)] hover:bg-[var(--bg-secondary)] text-[var(--text-body)]"
+                          }`}
+
                       >
                         {mode === "Light" && <Sun size={18} />}
                         {mode === "Dark" && <Moon size={18} />}
@@ -451,7 +497,11 @@ export default function Settings() {
                         <div className="w-5 h-5 rounded border border-[var(--border-color)] flex items-center justify-center text-[var(--text-on-primary)] group-hover:border-[var(--primary)] bg-[var(--bg-card)] group-hover:shadow-sm transition-all has-[:checked]:bg-[var(--primary)] has-[:checked]:border-[var(--primary)]">
                           <input
                             type="checkbox"
-                            defaultChecked={idx < 2}
+                            checked={
+                              Array.isArray(_emailPreferences) &&
+                              _emailPreferences.find((p) => p.key === item.key)?.enabled === true
+                            }
+                            onChange={() => toggleEmailPref(item.key)}
                             className="hidden"
                           />
                           <Check size={14} />
@@ -464,12 +514,36 @@ export default function Settings() {
                   </div>
                 </div>
 
+                {/* Manual Low Attendance Notice */}
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    Manual Actions
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleSendLowAttendanceNotice}
+                      disabled={sendingNotice}
+                      className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-[var(--danger,#ef4444)] text-white hover:opacity-90 shadow-md disabled:opacity-50"
+                    >
+                      {sendingNotice ? "Sending…" : "Send Low Attendance Notice"}
+                    </button>
+                    {noticeResult && (
+                      <span className={`text-sm ${noticeResult.success ? "text-green-600" : "text-[var(--danger,#ef4444)]"}`}>
+                        {noticeResult.message}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-body)] opacity-90">
+                    Manually send low attendance warning emails to students with less than 75% attendance in your subjects.
+                  </p>
+                </div>
+
                 {/* Footer Buttons */}
                 <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)]">
+                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]">
                     {t('settings.general.cancel')}
                   </button>
-                  <button 
+                  <button
                     onClick={saveProfile}
                     disabled={saving}
                     className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md disabled:opacity-50"
@@ -507,7 +581,7 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div 
+                  <div
                     className="relative py-8 select-none px-2"
                     ref={sliderRef}
                   >
@@ -581,10 +655,10 @@ export default function Settings() {
                   </div>
 
                   <div className="pt-8 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer">
+                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
                       {t('settings.general.cancel')}
                     </button>
-                    <button 
+                    <button
                       onClick={saveProfile}
                       disabled={saving}
                       className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"
@@ -614,7 +688,7 @@ export default function Settings() {
                 </div>
 
                 <div className="flex items-center gap-6 p-6 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
-                  <div className="w-20 h-20 bg-[var(--bg-hover)] rounded-full flex items-center justify-center text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden">
+                  <div className="w-20 h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden">
                     {profile.avatarUrl ? (
                       <img
                         src={profile.avatarUrl}
@@ -633,7 +707,7 @@ export default function Settings() {
                       {profile.branch?.toUpperCase() || "Department of Science"}
                     </p>{" "}
                   </div>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] transition shadow-sm cursor-pointer">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] transition shadow-sm cursor-pointer">
                     <Upload size={16} />
                     <span>{t('settings.profile.change_photo')}</span>
                     <input
@@ -761,7 +835,7 @@ export default function Settings() {
                         }
                       })();
                     }}
-                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer"
                   >
                     {t('settings.general.cancel')}
                   </button>
@@ -805,7 +879,7 @@ export default function Settings() {
                       </p>
                     </div>
                   </div>
-                  <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-body)] rounded-lg text-sm font-medium hover:bg-[var(--bg-hover)] shadow-sm flex items-center gap-2 cursor-pointer">
+                  <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-body)] rounded-lg text-sm font-medium hover:bg-[var(--bg-secondary)] shadow-sm flex items-center gap-2 cursor-pointer">
                     <RefreshCw size={16} /> {t('settings.face_settings.recalibrate')}
                   </button>
                 </div>
@@ -875,7 +949,7 @@ export default function Settings() {
                         {t('settings.face_settings.reset_model')}
                       </h5>
                       <p className="text-xs text-[var(--danger)] mt-1">
-                       {t('settings.face_settings.reset_desc')}
+                        {t('settings.face_settings.reset_desc')}
                       </p>
                     </div>
                     <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--danger)]/20 text-[var(--danger)] rounded-lg text-sm font-medium hover:bg-[var(--danger)]/20 transition shadow-sm flex items-center gap-2 cursor-pointer">
@@ -886,10 +960,10 @@ export default function Settings() {
 
                 {/* Footer Buttons */}
                 <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer">
+                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
                     {t('settings.face_settings.discard')}
                   </button>
-                  <button 
+                  <button
                     onClick={saveProfile}
                     disabled={saving}
                     className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"

@@ -5,7 +5,13 @@ from datetime import datetime, timedelta, UTC, timezone
 import secrets
 import os
 from bson import ObjectId
-from app.utils.jwt_token import create_access_token, create_refresh_token, decode_jwt
+from app.utils.jwt_token import (
+    create_access_token,
+    create_refresh_token,
+    decode_jwt,
+    generate_session_id,
+    hash_session_id,
+)
 from urllib.parse import quote
 
 from ...schemas.auth import (
@@ -41,7 +47,6 @@ oauth = OAuth()
 async def register(
     request: Request, payload: RegisterRequest, background_tasks: BackgroundTasks
 ):
-
     # Check existing user
     existing = await db.users.find_one({"email": payload.email})
 
@@ -113,7 +118,7 @@ async def register(
                         "inApp": True,
                         "sound": False,
                     },
-                    "emailPreferences": {},
+                    "emailPreferences": [],
                     "thresholds": {
                         "warningVal": 75,
                         "safeVal": 85,
@@ -183,11 +188,30 @@ async def login(request: Request, payload: LoginRequest):
     if not user.get("is_verified", False):
         raise HTTPException(status_code=403, detail="Please verify your email first..")
 
-    # 4. Generate JWT token
+    # 4. Generate session ID and tokens
+    session_id = generate_session_id()
     access_token = create_access_token(
-        user_id=str(user["_id"]), role=user["role"], email=user["email"]
+        user_id=str(user["_id"]),
+        role=user["role"],
+        email=user["email"],
+        session_id=session_id,
     )
-    refresh_token = create_refresh_token(user_id=str(user["_id"]))
+    refresh_token = create_refresh_token(
+        user_id=str(user["_id"]), session_id=session_id
+    )
+
+    # 5. Store hashed session ID in database (invalidates previous sessions)
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {
+            "$set": {
+                "current_active_session": hash_session_id(session_id),
+                "session_created_at": datetime.now(UTC),
+            }
+        },
+    )
+
+    logger.info(f"New session created for user: {payload.email}")
 
     return {
         "user_id": str(user["_id"]),
@@ -209,14 +233,36 @@ async def refresh_token(request: Request, payload: RefreshTokenRequest):
             raise HTTPException(status_code=401, detail="Invalid token type")
 
         user_id = decoded.get("user_id")
+        session_id = decoded.get("session_id")
+
         user = await db.users.find_one({"_id": ObjectId(user_id)})
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
+        # Validate session is still active
+        if session_id:
+            stored_session_hash = user.get("current_active_session")
+            if not stored_session_hash or stored_session_hash != hash_session_id(
+                session_id
+            ):
+                raise HTTPException(
+                    status_code=401,
+                    detail=(
+                        "SESSION_CONFLICT: You have been logged out because "
+                        "this account was logged in on another device"
+                    ),
+                )
+
+        # Generate new tokens with the same session ID to maintain session continuity
         access_token = create_access_token(
-            user_id=str(user["_id"]), role=user["role"], email=user["email"]
+            user_id=str(user["_id"]),
+            role=user["role"],
+            email=user["email"],
+            session_id=session_id,
         )
-        new_refresh_token = create_refresh_token(user_id=str(user["_id"]))
+        new_refresh_token = create_refresh_token(
+            user_id=str(user["_id"]), session_id=session_id
+        )
 
         return {
             "user_id": str(user["_id"]),
@@ -227,8 +273,10 @@ async def refresh_token(request: Request, payload: RefreshTokenRequest):
             "token": access_token,
             "refresh_token": new_refresh_token,
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Refresh token error: {e}")
+        logger.exception("Refresh token error: %s: %s", type(e).__name__, e)
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 
@@ -395,11 +443,30 @@ async def reset_password(payload: ResetPasswordRequest) -> dict:
 
     stored_otp_hash = user.get("reset_otp_hash")
     expiry = _normalize_expiry(user.get("otp_expiry"))
+    failed_attempts = user.get("otp_failed_attempts", 0)
+
+    if failed_attempts >= OTP_FAILED_ATTEMPTS_MAX:
+        await db.users.update_one({"_id": user["_id"]}, _clear_otp_fields())
+        raise HTTPException(status_code=400, detail=GENERIC_OTP_ERROR)
 
     if expiry is None or expiry < datetime.now(UTC):
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$inc": {"otp_failed_attempts": 1}},
+        )
+        new_attempts = failed_attempts + 1
+        if new_attempts >= OTP_FAILED_ATTEMPTS_MAX:
+            await db.users.update_one({"_id": user["_id"]}, _clear_otp_fields())
         raise HTTPException(status_code=400, detail=GENERIC_OTP_ERROR)
 
     if not stored_otp_hash or not verify_password(payload.otp, stored_otp_hash):
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {"$inc": {"otp_failed_attempts": 1}},
+        )
+        new_attempts = failed_attempts + 1
+        if new_attempts >= OTP_FAILED_ATTEMPTS_MAX:
+            await db.users.update_one({"_id": user["_id"]}, _clear_otp_fields())
         raise HTTPException(status_code=400, detail=GENERIC_OTP_ERROR)
 
     new_hash = hash_password(payload.new_password)
@@ -519,11 +586,41 @@ async def google_callback(request: Request):
         logger.info(f"User auto-verified via Google Login: {email}")
         user["is_verified"] = True
 
-    # CREATE JWT (MATCH NORMAL LOGIN)
+    # Generate session ID and tokens (same as normal login)
+    session_id = generate_session_id()
     access_token = create_access_token(
-        user_id=str(user["_id"]), role=user["role"], email=user["email"]
+        user_id=str(user["_id"]),
+        role=user["role"],
+        email=user["email"],
+        session_id=session_id,
     )
-    refresh_token = create_refresh_token(user_id=str(user["_id"]))
+    refresh_token = create_refresh_token(
+        user_id=str(user["_id"]), session_id=session_id
+    )
+
+    # Store hashed session ID in database (invalidates previous sessions)
+    try:
+        await db.users.update_one(
+            {"_id": user["_id"]},
+            {
+                "$set": {
+                    "current_active_session": hash_session_id(session_id),
+                    "session_created_at": datetime.now(UTC),
+                }
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to update session for OAuth user %s: %s",
+            email,
+            exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Could not create session, please try again.",
+        )
+
+    logger.info(f"New session created for OAuth user: {email}")
 
     FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip(
         "/"

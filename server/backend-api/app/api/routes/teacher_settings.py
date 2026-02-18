@@ -1,4 +1,6 @@
 # backend/app/api/routes/settings.py
+import logging
+
 from app.db.mongo import db
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
 from datetime import datetime
@@ -9,8 +11,12 @@ from app.utils.utils import serialize_bson
 from app.api.deps import get_current_teacher
 from app.services.subject_service import add_subject_for_teacher
 from app.db.subjects_repo import get_subjects_by_ids
+from app.services import schedule_service
 from bson import ObjectId, errors as bson_errors
 from app.schemas.schedule import Schedule
+from app.services.attendance_alerts import send_low_attendance_for_teacher
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -39,6 +45,10 @@ async def get_settings(current: dict = Depends(get_current_teacher)):
     subject_ids = teacher.get("subjects", [])
     subjects = await get_subjects_by_ids(subject_ids)
 
+    # Fetch schedule from dedicated service
+    # user_id is already ObjectId from deps
+    schedule_blob = await schedule_service.get_teacher_schedule_blob(str(user_id))
+
     profile = {
         "id": user_id,
         # Identity (Users collection)
@@ -53,7 +63,7 @@ async def get_settings(current: dict = Depends(get_current_teacher)):
         "department": teacher.get("department"),
         "subjects": subjects,
         "settings": teacher.get("settings", {}),
-        "schedule": teacher.get("schedule", {}),
+        "schedule": schedule_blob,
     }
 
     return serialize_bson(profile)
@@ -112,6 +122,8 @@ async def patch_settings_route(
     subject_ids = fresh_teacher.get("subjects", [])
     subjects = await get_subjects_by_ids(subject_ids)
 
+    schedule_blob = await schedule_service.get_teacher_schedule_blob(str(user_id))
+
     profile = {
         "id": str(user_id),
         "name": fresh_user.get("name", ""),
@@ -123,10 +135,34 @@ async def patch_settings_route(
         "avatarUrl": fresh_teacher.get("avatarUrl"),
         "subjects": subjects,
         "settings": fresh_teacher.get("settings", {}),
-        "schedule": fresh_teacher.get("schedule", {}),
+        "schedule": schedule_blob,
     }
 
     return serialize_bson(profile)
+
+
+# ---------- MANUAL LOW ATTENDANCE NOTICE ----------
+@router.post("/send-low-attendance-notice")
+async def manual_send_low_attendance_notice(
+    current: dict = Depends(get_current_teacher),
+):
+    """Manually trigger low attendance email notices for the current teacher."""
+    teacher = current["teacher"]
+    teacher_id = current["id"]
+
+    try:
+        emails_sent = await send_low_attendance_for_teacher(teacher_id, teacher)
+    except Exception as e:
+        logger.error(f"Manual low attendance notice failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to send low attendance notices",
+        )
+
+    return {
+        "message": f"Low attendance notices sent successfully. Emails sent: {emails_sent}",  # noqa: E501
+        "emails_sent": emails_sent,
+    }
 
 
 # ---------------- PUT SETTINGS ----------------
@@ -206,7 +242,7 @@ async def add_subject(payload: dict, current: dict = Depends(get_current_teacher
     if "latitude" in payload and "longitude" in payload:
         lat_raw = payload.get("latitude")
         lng_raw = payload.get("longitude")
-        
+
         # Check for valid values (allow 0 but reject empty strings or None)
         if (
             lat_raw is not None
@@ -218,13 +254,13 @@ async def add_subject(payload: dict, current: dict = Depends(get_current_teacher
                 lat = float(lat_raw)
                 lng = float(lng_raw)
                 rad = float(payload.get("radius", 50))  # Default 50m
-                
+
                 if not (-90 <= lat <= 90):
                     raise ValueError("Invalid latitude")
                 if not (-180 <= lng <= 180):
                     raise ValueError("Invalid longitude")
                 if rad <= 0:
-                     raise ValueError("Invalid radius")
+                    raise ValueError("Invalid radius")
 
                 location = {"lat": lat, "long": lng, "radius": rad}
             except (ValueError, TypeError):
@@ -259,18 +295,24 @@ async def replace_settings(user_id_str: str, payload: dict) -> dict:
     if "settings" in payload and isinstance(payload["settings"], dict):
         teacher_updates["settings"] = payload["settings"]
 
-    # Accept schedule as an object; basic type check performed here. More
-    # validation can be added by parsing with `Schedule.parse_obj(...)`.
+    # Validating and saving schedule using the dedicated service.
+    # The dedicated service saves entries into the 'schedules' collection.
     if "schedule" in payload:
         if payload["schedule"] is None:
-            teacher_updates["schedule"] = None
+            await schedule_service.save_teacher_schedule(
+                str(user_id), {"timetable": []}
+            )
         elif isinstance(payload["schedule"], dict):
             # optional deeper validation
             try:
                 Schedule.parse_obj(payload["schedule"])
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid schedule format")
-            teacher_updates["schedule"] = payload["schedule"]
+            
+            # Save to separate collection
+            await schedule_service.save_teacher_schedule(
+                str(user_id), payload["schedule"]
+            )
         else:
             raise HTTPException(status_code=400, detail="Invalid schedule format")
 
@@ -290,18 +332,21 @@ async def replace_settings(user_id_str: str, payload: dict) -> dict:
     subject_ids = fresh_teacher.get("subjects", [])
     subjects = await get_subjects_by_ids(subject_ids)
 
+    # Fetch from dedicated collection
+    schedule_blob = await schedule_service.get_teacher_schedule_blob(str(user_id))
+
     profile = {
         "id": str(user_id),
         "name": fresh_user.get("name", ""),
         "email": fresh_user.get("email", ""),
-        "phone": fresh_user.get("phone", ""),
+        "phone": fresh_teacher.get("phone", ""),
         "employee_id": fresh_user.get("employee_id"),
         "role": "teacher",
         "department": fresh_teacher.get("department"),
         "avatarUrl": fresh_teacher.get("avatarUrl"),
         "subjects": subjects,
         "settings": fresh_teacher.get("settings", {}),
-        "schedule": fresh_teacher.get("schedule", {}),
+        "schedule": schedule_blob,
     }
 
     return profile

@@ -15,13 +15,15 @@ import {
   AlertCircle,
   User,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  QrCode
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { fetchMySubjects, fetchSubjectStudents } from "../api/teacher";
 import { captureAndSend } from "../api/attendance";
 import FaceOverlay from "../components/FaceOverlay";
 import api from "../api/axiosClient";
+import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
 
 export default function MarkAttendance() {
   const { t } = useTranslation();
@@ -39,7 +41,9 @@ export default function MarkAttendance() {
   const [attendanceMap, setAttendanceMap] = useState({});
   const [attendanceSubmitted, setAttendanceSubmitted] = useState(false);
   
-  const [currentCoords, setCurrentCoords] = useState(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  
   const [locationError, setLocationError] = useState(
     !navigator.geolocation ? "Geolocation is not supported by your browser" : null
   );
@@ -54,7 +58,6 @@ export default function MarkAttendance() {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
         };
-        setCurrentCoords(coords);
         currentCoordsRef.current = coords;
         setLocationError(null);
       },
@@ -240,12 +243,39 @@ export default function MarkAttendance() {
               <span>09:00 - 10:00</span>
             </div>
             <button
+              onClick={() => {
+                if (!selectedSubject) {
+                  alert(t('mark_attendance.alerts.select_subject_first') || 'Please select a subject first');
+                  return;
+                }
+                setSessionId(`${selectedSubject}-${Date.now()}`);
+                setShowQRModal(true);
+              }}
+              disabled={!selectedSubject}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition ${
+                selectedSubject
+                  ? 'bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] cursor-pointer'
+                  : 'bg-[var(--bg-secondary)] text-[var(--text-body)]/80 cursor-not-allowed'
+              }`}
+            >
+              <QrCode size={16} />
+              <span>{t('mark_attendance.start_qr_session') || 'Start QR Session'}</span>
+            </button>
+            <button
                onClick={() => navigate("/settings")}
                className="flex items-center gap-2 px-3 py-1.5 border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] bg-[var(--bg-card)] transition cursor-pointer text-[var(--text-body)]">
                <Settings size={16} /><span>{t('mark_attendance.session_settings')}</span>
             </button>
           </div>
         </div>
+
+        {/* QR Code Modal */}
+        {showQRModal && selectedSubject && (
+          <StartAttendanceModal 
+            sessionId={sessionId}
+            onClose={() => setShowQRModal(false)} 
+          />
+        )}
 
         {/* --- FILTERS ROW --- */}
         <div className="flex flex-col sm:flex-row gap-4 items-center">
@@ -274,7 +304,7 @@ export default function MarkAttendance() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {locationError && (
-            <div className="lg:col-span-12 flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700">
+            <div className="lg:col-span-12 flex items-center gap-3 p-4 rounded-xl bg-[var(--danger)]/10 border border-[var(--danger)]/25 text-[var(--danger)]">
                <AlertCircle className="w-5 h-5 flex-shrink-0" />
                <div>
                  <h4 className="font-semibold text-sm">Location Service Issue</h4>
@@ -305,12 +335,12 @@ export default function MarkAttendance() {
 
               {/* Bottom Camera Controls */}
               <div className="absolute bottom-0 left-0 right-0 p-4 bg-linear-to-t from-black/60 to-transparent flex justify-between items-end">
-                <div className="text-white/70 text-xs">
+                <div className="text-[var(--text-on-primary)]/70 text-xs">
                   <p>{t('mark_attendance.camera_overlay.recognition_running')}</p>
                   <p className="opacity-70">{t('mark_attendance.camera_overlay.tip')}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                   <button className="p-2 bg-white/10 hover:bg-white/20 text-[var(--text-on-primary)] rounded-lg transition backdrop-blur-md">
+                   <button className="p-2 bg-[var(--bg-card)]/10 hover:bg-[var(--bg-card)]/20 text-[var(--text-on-primary)] rounded-lg transition backdrop-blur-md">
                      <Grid size={20} />
                    </button>
                 </div>

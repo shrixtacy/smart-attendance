@@ -2,6 +2,64 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* DEFAULT (Light) */
+:root,
+[data-theme="Light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e5e7eb;
+  --bg-card: #ffffff;
+
+  --text-main: #0f172a;
+  --text-body: #475569;
+
+  --border-color: #e5e7eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+}
+
+/* Dark Theme */
+[data-theme="Dark"] {
+  --bg-primary: #020617;
+  --bg-secondary: #020617;
+  --bg-card: #020617;
+
+  --text-main: #f8fafc;
+  --text-body: #cbd5f5;
+
+  --border-color: #334155;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+}
+
+/* Forest */
+[data-theme="Forest"] {
+  --bg-primary: #022c22;
+  --bg-secondary: #064e3b;
+  --bg-card: #064e3b;
+
+  --text-main: #ecfdf5;
+  --text-body: #a7f3d0;
+
+  --border-color: #047857;
+  --primary: #34d399;
+  --primary-hover: #6ee7b7;
+}
+
+/* Cyber */
+[data-theme="Cyber"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #020617;
+
+  --text-main: #22d3ee;
+  --text-body: #67e8f9;
+
+  --border-color: #164e63;
+  --primary: #06b6d4;
+  --primary-hover: #22d3ee;
+}
+
+
 /* Theme variables (light default) */
 :root {
   /* Backgrounds */
@@ -72,8 +130,9 @@
     /* Action colors */
   --success: #22c55e;       /* green-500 */
   --warning: #f59e0b;       /* amber-500 */
-  --action-info-bg: #3b82f6;   /* blue-500 */
-  --action-info-hover: #2563eb;
+  --action-info-bg: #2563eb;      /* reuse existing hover (darker) */
+  --action-info-hover: #3b82f6;   /* optional: keep hover lighter */
+
 
   --overlay: rgba(0, 0, 0, 0.6);
 
@@ -107,8 +166,9 @@
     /* Action colors */
   --success: #16a34a;       /* green-600 */
   --warning: #d97706;       /* amber-600 */
-  --action-info-bg: #059669;   /* emerald-600 */
-  --action-info-hover: #047857;
+  --action-info-bg: #059669;     /* base action info background (lighter) */
+  --action-info-hover: #047857;  /* darker hover state for action info */
+
 
   --overlay: rgba(20, 83, 45, 0.4);
 

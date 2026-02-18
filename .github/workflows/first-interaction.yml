@@ -1,41 +1,72 @@
-name: Welcome First-Time Contributors
+name: PR Welcome & Triage
 
+# 🚀 Use 'pull_request_target' to safely handle Fork PRs with permissions
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
-  issues:
-    types: [opened]
+
+# 🚀 Grant write permission to post comments
+permissions:
+  pull-requests: write
+  issues: write
 
 jobs:
-  greet:
+  welcome-message:
     runs-on: ubuntu-latest
     steps:
-      - name: Greet first-time contributor
-        uses: actions/first-interaction@v1
+      - name: Post Welcome Comment
+        uses: actions/github-script@v6
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: |
-            👋 Welcome to **Smart Attendance**!
+          script: |
+            // Get the user and their association with the repo
+            const creator = context.payload.pull_request.user.login;
+            const association = context.payload.pull_request.author_association;
+            
+            console.log(`User: ${creator}, Association: ${association}`);
 
-            Thanks for opening your first issue 🎉  
-            A mentor will review this soon.
+            // 1. Define the Common Instruction (Copilot)
+            const copilotInstruction = `
+            ---
+            ### 🤖 **Action Required: Check Copilot Reviews**
+            
+            Our AI reviewer (Copilot) may have left comments or suggestions on your code.
+            
+            👉 **Please check the automated review.** If any changes are requested or improvements are suggested, kindly update your PR.
+            `;
 
-            Please make sure:
-            - You followed the issue template
-            - You provided clear reproduction steps
-            - Relevant screenshots/logs are attached
+            // 2. Define the Specific Greetings
+            const newContributorGreeting = `
+            ## 👋 Welcome, @${creator}!
+            
+            Thanks for opening your **first Pull Request**! 🎉
+            We are excited to have you here. Please make sure you've read our [Contributing Guidelines](CONTRIBUTING.md).
+            `;
 
-            Happy contributing 🚀
+            const recurringContributorGreeting = `
+            ## 🚀 Welcome back, @${creator}!
+            
+            Great to see you again! Thanks for another contribution.
+            `;
 
-          pr-message: |
-            🎉 Welcome to **Smart Attendance**!
+            // 3. Logic to choose the greeting
+            // Associations for new users: 'FIRST_TIMER', 'FIRST_TIME_CONTRIBUTOR', 'NONE'
+            // Associations for recurring: 'CONTRIBUTOR', 'COLLABORATOR', 'MEMBER', 'OWNER'
+            
+            let finalMessage = '';
+            
+            // recurring contributors
+            if (['COLLABORATOR', 'MEMBER', 'OWNER', 'CONTRIBUTOR'].includes(association)) {
+              finalMessage = recurringContributorGreeting + copilotInstruction;
+            } 
+            // new contributors
+            else {
+              finalMessage = newContributorGreeting + copilotInstruction;
+            }
 
-            This is your first Pull Request — great job 🙌  
-            A mentor will review it shortly.
-
-            Before merge, ensure:
-            - All CI checks pass
-            - PR template is fully filled
-            - Changes are scoped to the linked issue
-
-            Thanks for contributing 🚀
+            // 4. Post the comment
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: finalMessage
+            });

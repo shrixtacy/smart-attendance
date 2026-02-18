@@ -12,6 +12,7 @@ import {
   AlertTriangle
 } from "lucide-react"; 
 import { getTodaySchedule } from "../api/schedule";
+import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export default function Dashboard() {
     const data = localStorage.getItem("user");
     return data ? JSON.parse(data) : null;
   });
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [mlStatus, setMlStatus] = useState("checking"); // checking, ready, waking-up
   const [todayClasses, setTodayClasses] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(true);
@@ -142,6 +144,8 @@ export default function Dashboard() {
 
   // Get next upcoming class - memoized to avoid redundant computation
   const nextClass = useMemo(() => {
+    // trigger re-calc on tick
+    void tick;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -195,16 +199,20 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-hover)] font-medium transition-colors flex items-center gap-2 cursor-pointer">
+            <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium transition-colors flex items-center gap-2 cursor-pointer">
               <Download size={18} />
               {t('dashboard.download_report')}
             </button>
-            <Link to="/start-attendance" className="hover:bg-[var(--primary-hover)] px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium shadow-sm flex items-center gap-2 transition-colors">
+            <Link to="/attendance" className="px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium shadow-sm flex items-center gap-2 transition-colors">
               <Play size={18} fill="currentColor" />
               {t('dashboard.startAttendance')}
             </Link>
           </div>
         </div>
+
+        {showAttendanceModal && (
+          <StartAttendanceModal onClose={() => setShowAttendanceModal(false)} />
+        )}
 
         {/* --- SECTION 2: MAIN GRID LAYOUT --- */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -290,19 +298,19 @@ export default function Dashboard() {
             {/* 2.3 Quick Actions Row (Light Gray Cards) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
               <Link to="/students" className="block">
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:bg-[var(--bg-hover)] transition">
+                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:opacity-90 transition">
                   <div className="font-semibold text-[var(--text-main)] mb-1">{t('dashboard.quick_actions.view_students')}</div>
                   <div className="text-xs text-[var(--text-body)]">{t('dashboard.quick_actions.view_students_desc')}</div>
                 </div>
               </Link>
               <Link to="/attendance" className="block">
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:bg-[var(--bg-hover)] transition">
+                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:opacity-90 transition">
                   <div className="font-semibold text-[var(--text-main)] mb-1">{t('dashboard.quick_actions.go_to_attendance')}</div>
                   <div className="text-xs text-[var(--text-body)]">{t('dashboard.quick_actions.go_to_attendance_desc')}</div>
                 </div>
               </Link>
               <Link to="/" className="block">
-                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:bg-[var(--bg-hover)] transition">
+                <div className="bg-[var(--bg-secondary)] p-5 rounded-2xl cursor-pointer hover:opacity-90 transition">
                   <div className="font-semibold text-[var(--text-main)] mb-1">{t('dashboard.quick_actions.manage_schedule')}</div>
                   <div className="text-xs text-[var(--text-body)]">{t('dashboard.quick_actions.manage_schedule_desc')}</div>
                 </div>

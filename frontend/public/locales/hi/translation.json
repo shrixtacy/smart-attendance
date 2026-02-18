@@ -82,6 +82,7 @@
       "after_attending": "भाग लेने के बाद",
       "needed_for_75": "75% के लिए आवश्यक कक्षाएं",
       "more_classes": "{{count}} और",
+      "more_classes_overflow": "{{count}}+",
       "eligible": "फाइनल के लिए पात्र",
       "not_eligible": "अभी पात्र नहीं",
       "eligible_desc": "आप 75% नियम से सुरक्षित रूप से ऊपर होंगे।",

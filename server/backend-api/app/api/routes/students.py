@@ -151,15 +151,26 @@ async def get_my_subjects(current_user: dict = Depends(get_current_user)):
             else {"present": 0, "absent": 0, "total": 0, "percentage": 0}
         )
 
+        # Calculate percentage as fallback (in case it's not stored or is 0)
+        total = attendance_data.get("total", 0)
+        present = attendance_data.get("present", 0)
+        percentage = attendance_data.get("percentage", 0)
+        
+        if total > 0 and percentage == 0:
+            # Recalculate if total is set but percentage is 0
+            percentage = round((present / total) * 100, 2)
+        elif total == 0:
+            percentage = 0
+
         results.append(
             {
                 "id": str(sub["_id"]),
                 "name": sub["name"],
                 "code": sub.get("code"),
                 "type": sub.get("type", "Core"),
-                "attendance": attendance_data.get("percentage", 0),
-                "attended": attendance_data.get("present", 0),
-                "total": attendance_data.get("total", 0),
+                "attendance": percentage,
+                "attended": present,
+                "total": total,
             }
         )
 

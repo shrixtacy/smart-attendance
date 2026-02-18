@@ -209,7 +209,7 @@ export default function Register() {
                       name="branch"
                       value={formData.branch}
                       onChange={handleChange}
-                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10 appearance-none text-[var(--text-body)]"
+                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10 appearance-none text-[var(--text-main)]"
                     >
                       <option value="" disabled>{t('register.select_branch')}</option>
                       <option value="cse">Computer Science (CSE)</option>

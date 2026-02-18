@@ -1,6 +1,5 @@
-name: Dual Assignment Protector
+name: Limit Assigned Issues
 
-# Trigger when an issue is manually assigned
 on:
   issues:
     types: [assigned]
@@ -9,58 +8,79 @@ permissions:
   issues: write
 
 jobs:
-  enforce-one-issue:
+  check-workload:
     runs-on: ubuntu-latest
     steps:
-      - name: Check for existing assignments
+      - name: Check User Workload
         uses: actions/github-script@v7
         with:
           script: |
             const assignee = context.payload.assignee.login;
-            const currentIssueNumber = context.payload.issue.number;
+            const currentIssueNumber = context.issue.number;
             const repo = context.repo;
+
+            // 🤖 1. BOT BYPASS (Fixes the Error)
+            // If the assignee is Copilot or any other bot, stop the script immediately.
+            if (assignee === 'copilot' || assignee.endsWith('[bot]')) {
+              console.log(`🤖 Assignee is a bot/AI (${assignee}). Skipping workload checks.`);
+              return;
+            }
 
             console.log(`Checking workload for @${assignee}...`);
 
-            // 1. Fetch all OPEN issues assigned to this user
-            const assignedIssues = await github.paginate(github.rest.issues.listForRepo, {
-              ...repo,
-              state: 'open',
-              assignee: assignee
-            });
-
-            // 2. Filter out the current issue (since it was just assigned, it might be in the list)
-            // We want to find *previous* or *other* issues.
-            const otherIssues = assignedIssues.filter(i => i.number !== currentIssueNumber && !i.pull_request);
-
-            // 3. If they have other issues, triggered the PROTECTION
-            if (otherIssues.length > 0) {
-              
-              const issueLinks = otherIssues.map(i => `#${i.number}`).join(', ');
-
-              console.log(`⚠️ Violation detected. User has ${otherIssues.length} other issues.`);
-
-              // A. Post a Warning Comment
-              await github.rest.issues.createComment({
+            // 2. Fetch all OPEN issues assigned to this user
+            // We use a try-catch block to handle API errors gracefully just in case
+            try {
+              const assignedIssues = await github.paginate(github.rest.issues.listForRepo, {
                 ...repo,
-                issue_number: currentIssueNumber,
-                body: `🚫 **Assignment Blocked**
-                
-                @${assignee} is already assigned to **${otherIssues.length} other open issue(s)**: ${issueLinks}.
-                
-                According to project policy, a contributor can only hold **one issue at a time**.
-                
-                ⚠️ **Action Taken:** The user has been automatically unassigned from this issue.`
+                state: 'open',
+                assignee: assignee
               });
 
-              // B. Revert the Assignment (Unassign the user)
-              await github.rest.issues.removeAssignees({
-                ...repo,
-                issue_number: currentIssueNumber,
-                assignees: [assignee]
-              });
-              
-              console.log(`✅ User unassigned from #${currentIssueNumber}`);
-            } else {
-              console.log("✅ User is clear. Assignment allowed.");
+              // 3. Filter out the current issue
+              const otherIssues = assignedIssues.filter(i => i.number !== currentIssueNumber && !i.pull_request);
+
+              // 4. Logic: Check if user has other issues
+              if (otherIssues.length > 0) {
+                
+                // Search for OPEN PRs created by this user
+                const { data: prSearch } = await github.rest.search.issuesAndPullRequests({
+                  q: `is:pr is:open author:${assignee} repo:${repo.owner}/${repo.repo}`
+                });
+
+                // Exception: If they have open PRs, allow assignment
+                if (prSearch.total_count > 0) {
+                  console.log(`✅ Exception granted: @${assignee} has pending PRs.`);
+                  return; 
+                }
+
+                // Violation: Too many issues + No PRs
+                const issueLinks = otherIssues.map(i => `#${i.number}`).join(', ');
+                console.log(`⚠️ Violation: User has ${otherIssues.length} other issues.`);
+
+                // Post Warning
+                await github.rest.issues.createComment({
+                  ...repo,
+                  issue_number: currentIssueNumber,
+                  body: `🚫 **Assignment Blocked**
+                  
+                  @${assignee} is already assigned to **${otherIssues.length} other open issue(s)** (${issueLinks}) and has **no open Pull Requests**.
+                  
+                  **Policy:** You cannot take a new issue while holding others without submitting code.
+                  👉 Please submit a PR for your current issue first.`
+                });
+
+                // Unassign User
+                await github.rest.issues.removeAssignees({
+                  ...repo,
+                  issue_number: currentIssueNumber,
+                  assignees: [assignee]
+                });
+              } else {
+                console.log("✅ User is clear. Assignment allowed.");
+              }
+
+            } catch (error) {
+              console.log(`⚠️ Error checking workload: ${error.message}`);
+              // Do not fail the workflow if the API hiccups
             }

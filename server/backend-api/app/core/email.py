@@ -128,6 +128,8 @@ class BrevoEmailService:
         subject: str,
         attendance_percentage: float,
         threshold: int,
+        present_count: int,
+        total_count: int,
     ) -> dict:
         """Send low attendance warning to student."""
         try:
@@ -135,7 +137,12 @@ class BrevoEmailService:
                 to_email=to_email,
                 subject=f"Low Attendance Warning - {subject}",
                 html_content=low_attendance_warning_template(
-                    student_name, subject, attendance_percentage, threshold
+                    student_name, 
+                    subject, 
+                    attendance_percentage, 
+                    threshold,
+                    present_count,
+                    total_count
                 ),
             )
             return {"status": "sent", "error": None}

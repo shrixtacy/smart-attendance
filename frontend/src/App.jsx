@@ -1,5 +1,6 @@
 import React from "react";
 import { Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import Dashboard from "./pages/Dashboard";
 import MarkAttendance from "./pages/MarkAttendance";
 import StudentList from "./pages/StudentList";
@@ -21,6 +22,7 @@ import MarkWithQR from "./students/pages/MarkWithQR.jsx"
 import OAuthCallback from "./pages/OAuthCallback.jsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForgotPassword from "./pages/ForgotPassword";
+//import ThemeToggle from "./components/ThemeToggle";
 
 
 /**
@@ -65,6 +67,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
+      <Toaster position="top-right" />
       {!hideNavbar && <Header theme={theme} setTheme={setTheme} />}
 
       <main>

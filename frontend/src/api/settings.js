@@ -28,4 +28,7 @@ export const addSubject = async (payload) => {
   return res.data;
 };
 
-
+export const sendLowAttendanceNotice = async () => {
+  const res = await api.post("/settings/send-low-attendance-notice");
+  return res.data;
+};
