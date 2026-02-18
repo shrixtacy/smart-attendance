@@ -149,8 +149,9 @@ export default function LivenessCheck({ onSuccess }) {
     // Initialize MediaPipe FaceMesh once — stable because onResults/pickNextAction are stable
     useEffect(() => {
         const faceMesh = new FaceMesh({
+            // Load MediaPipe assets from a local/static path instead of a third-party CDN
             locateFile: (file) =>
-                `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+                `/mediapipe/face_mesh/${file}`
         });
 
         faceMesh.setOptions({
