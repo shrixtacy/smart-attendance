@@ -70,19 +70,6 @@ export default function App() {
       <Toaster position="top-right" />
       {!hideNavbar && <Header theme={theme} setTheme={setTheme} />}
 
-       
-      {/* GLOBAL TOP BAR */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          padding: "10px 20px",
-          borderBottom: "1px solid #ddd",
-        }}
-      >
-       
-      </div>
-
       <main>
         <Routes>
           <Route path="/" element={<RedirectToHome />} />

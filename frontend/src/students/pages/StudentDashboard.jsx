@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { 
   Bell, 
@@ -61,16 +61,6 @@ export default function StudentDashboard() {
     month: "long"
   });
 
-  const [username] = useState(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored).name : "";
-    } catch {
-      return "";
-    }
-  });
-
-
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col md:flex-row font-sans text-[var(--text-main)]">
 
@@ -80,12 +70,7 @@ export default function StudentDashboard() {
       <main className="flex-1 md:ml-64 pb-20 md:pb-0">
 
         {/* Header */}
-        <header className="px-6 py-5 bg-[var(--bg-card)] md:bg-transparent flex justify-between items-center">
-          <div>
-            <p className="text-xs text-[var(--text-body)]/80 font-medium md:hidden">{t("student_dashboard.portal_name")}</p>
-            <h1 className="text-xl md:text-2xl font-bold text-[var(--text-main)]">{t("student_dashboard.welcome", { name: username })}</h1>
-          </div>
-
+        <header className="px-6 py-5 bg-[var(--bg-card)] md:bg-transparent flex justify-end items-center">
           <div className="flex items-center gap-4">
             {/* Language Switcher */}
             <div className="flex gap-2 items-center bg-[var(--bg-card)] px-3 py-1.5 rounded-full border border-[var(--border-color)] shadow-sm">

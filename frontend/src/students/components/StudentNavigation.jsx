@@ -98,7 +98,7 @@ export default function StudentNavigation({ activePage = "home" }) {
         </nav>
 
         {/* THEME TOGGLE AND USER INFO */}
-        <div className="p-4 border-t border-[var(--border-color)] space-y-4 bg-[var(--bg-card)]">
+        <div className="p-4 border-t border-[var(--border-color)] space-y-4 bg-[var(--bg-card)] mb-8">
           <EnhancedThemeToggle />
           
           <div className="flex items-center justify-between p-2 rounded-lg hover:bg-[var(--bg-secondary)] transition">
