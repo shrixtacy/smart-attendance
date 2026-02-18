@@ -259,7 +259,7 @@ export default function LivenessCheck({ onSuccess }) {
                             <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                                 <div className="text-white flex flex-col items-center gap-3">
                                     <Loader2 size={32} className="animate-spin" />
-                                    <span className="text-sm font-medium">Initializing Vision Models...</span>
+                                    <span className="text-sm font-medium">Starting liveness check...</span>
                                 </div>
                             </div>
                         )}
