@@ -29,23 +29,26 @@ export default function NotificationDropdown() {
     }
   };
 
-  // Fetch notifications on component mount and when dropdown opens
+  // Initial fetch on component mount
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  // Fetch notifications when dropdown opens
   useEffect(() => {
     if (isOpen) {
       fetchNotifications();
     }
   }, [isOpen]);
 
-  // Periodic refresh of notifications every 30 seconds when dropdown is open
+  // Periodic refresh of notifications every 30 seconds
   useEffect(() => {
-    if (!isOpen) return;
-
     const interval = setInterval(() => {
       fetchNotifications();
     }, 30000); // 30 seconds
 
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, []);
 
   // Click outside handler
   useEffect(() => {
