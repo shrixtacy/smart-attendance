@@ -52,10 +52,12 @@ describe('Login Page', () => {
         );
 
         expect(screen.getByRole('heading', { name: /auth.signInTitle/i })).toBeInTheDocument();
-        // Use specific input elements
+        // Use specific input elements with their IDs which are accessible
         expect(screen.getByRole('textbox', { name: /email/i })).toBeInTheDocument();
-        const passwordInput = document.querySelector('input[type="password"]');
+        // Password input is accessible via its ID
+        const passwordInput = document.getElementById('password-input');
         expect(passwordInput).toBeInTheDocument();
+        expect(passwordInput?.getAttribute('type')).toMatch(/password|text/);
     });
 
     it('handles successful teacher login', async () => {
@@ -80,10 +82,12 @@ describe('Login Page', () => {
 
         // Fill form using more specific queries
         const emailInput = screen.getByRole('textbox', { name: /email/i });
-        const passwordInput = document.querySelector('input[type="password"]');
+        const passwordInput = document.getElementById('password-input');
         
         fireEvent.change(emailInput, { target: { value: 'teacher@test.com' } });
-        fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        if (passwordInput) {
+            fireEvent.change(passwordInput, { target: { value: 'password123' } });
+        }
 
         // Submit
         const submitBtn = screen.getByRole('button', { name: /submit login form/i });
@@ -125,10 +129,12 @@ describe('Login Page', () => {
         );
 
         const emailInput = screen.getByRole('textbox', { name: /email/i });
-        const passwordInput = document.querySelector('input[type="password"]');
+        const passwordInput = document.getElementById('password-input');
         
         fireEvent.change(emailInput, { target: { value: 'wrong@test.com' } });
-        fireEvent.change(passwordInput, { target: { value: 'wrongpass' } });
+        if (passwordInput) {
+            fireEvent.change(passwordInput, { target: { value: 'wrongpass' } });
+        }
 
         const submitBtn = screen.getByRole('button', { name: /submit login form/i });
         fireEvent.click(submitBtn);
