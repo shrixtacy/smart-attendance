@@ -85,7 +85,7 @@ export default function App() {
         onSuccess={handleSuccess}
       />
 
-      <main>
+      <main id="main-content">
         <Suspense fallback={<LoadingFallback />}>
           <Routes>
             <Route path="/" element={<RedirectToHome />} />
