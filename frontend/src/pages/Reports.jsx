@@ -29,7 +29,7 @@ const { t: _t } = useTranslation();
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [students, setStudents] = useState([]);
 
-  const [startDate, setStartDate] = useState(new Date());
+  const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [loadingFormat, setLoadingFormat] = useState(null);
