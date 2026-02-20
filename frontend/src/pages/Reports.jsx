@@ -22,9 +22,9 @@ import { toast } from "react-hot-toast";
 const REPORT_DATE_RANGE_DAYS = 30;
 
 export default function Reports() {
-  const { t } = useTranslation();
+const { t: _t } = useTranslation();
 
-  const [threshold, setThreshold] = useState(75);
+  const [threshold] = useState(75);
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [students, setStudents] = useState([]);
