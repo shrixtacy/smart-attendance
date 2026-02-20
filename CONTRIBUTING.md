@@ -1,38 +1,45 @@
-# Contributing to Smart Attendance
 
-Thanks for your interest in contributing to Smart Attendance as part of GirlScript Summer of Code (GSSoC) 2025! We're excited to build with you.
+# 🤝 Contributing to Smart Attendance
 
-## 📜 Code of Conduct
+Thanks for contributing to **Smart Attendance** 🎓  
+This guide explains how to contribute cleanly and efficiently.
 
-Please read and follow our [Code of Conduct](https://github.com/nem-web/smart-attendance/blob/main/CODE_OF_CONDUCT.md). Be respectful, helpful, and inclusive.
+Please follow the [Code of Conduct](https://github.com/nem-web/smart-attendance/blob/main/CODE_OF_CONDUCT.md).
 
-## 🧰 Getting Started
 
-### Prerequisites
+## 🧰 Prerequisites
 
 Before you begin, make sure you have the following installed:
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [Python](https://www.python.org/) (v3.8 or higher)
+- [Python](https://www.python.org/) (v3.10 or higher) - Required for backend-api and ml-service
+- [Node.js](https://nodejs.org/) (v18 or higher) - Required for frontend only
 - [Git](https://git-scm.com/)
+- [MongoDB](https://www.mongodb.com/try/download/community) (v5.0 or higher) - For data storage
 
-### Fork and Clone
+---
 
-1. **Fork this repository** by clicking the "Fork" button at the top right of this page.
 
-2. **Clone your fork locally:**
+## 🚀 Your First Contribution (Step-by-Step)
 
-   ```bash
-   git clone https://github.com/<your-username>/smart-attendance.git
-   cd smart-attendance
-   ```
+1. **Find an Issue**
+   - Look for issues tagged `good first issue` or `beginner friendly`.
+   - Comment _"Hi! I'd like to work on this issue. Please assign it to me."_  
+   ✅ Only comment if the issue is unassigned.
 
-3. **Add upstream remote:**
+2. **Fork the Repo**
 
-   ```bash
-   git remote add upstream https://github.com/nem-web/smart-attendance.git
-   ```
+```bash
+# In your browser
+Click the "Fork" button in the top-right of the repo
+```
 
-### Local Development Setup
+3. **Clone Your Fork**
+
+```bash
+git clone https://github.com/YOUR-USERNAME/smart-attendance.git
+cd smart-attendance
+```
+
+4. **Local Development Setup**
 
 #### Frontend Setup
 
@@ -44,144 +51,183 @@ npm run dev
 
 The frontend will be available at `http://localhost:5173`
 
-#### Backend Setup
+#### Backend API Setup
 
 ```bash
-cd backend
+cd server/backend-api
+
+# Create virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
-# Or install dependencies manually:
-# pip install fastapi uvicorn pillow pydantic
-python main.py
+
+# Create .env file and configure (see README.md for details)
+cp .env.example .env
+
+# Run the backend API
+python -m app.main
 ```
 
 The backend API will be available at `http://localhost:8000`
 
-## 🚀 Making Contributions
-
-### 1. Find an Issue
-
-- Browse the [Issues](https://github.com/nem-web/smart-attendance/issues) page
-- Look for issues labeled `good first issue` or `help wanted`
-- Comment on the issue saying you'd like to work on it
-- Wait to be assigned before starting work
-
-### 2. Create a Branch
-
-Create a new branch for your contribution:
+#### ML Service Setup
 
 ```bash
-git checkout -b feature/your-feature-name
-# or
-git checkout -b fix/your-bug-fix
+cd server/ml-service
+
+# Create virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create .env file and configure (see README.md for details)
+cp .env.example .env
+
+# Run the ML service
+python -m app.main
 ```
 
-Branch naming conventions:
-- `feature/` - for new features
-- `fix/` - for bug fixes
-- `docs/` - for documentation changes
-- `refactor/` - for code refactoring
+The ML service will be available at `http://localhost:8001`
 
-### 3. Make Your Changes
-
-- Write clean, readable code
-- Follow the existing code style
-- Comment your code where necessary
-- Test your changes locally
-
-#### Frontend Guidelines
-
-- Use React functional components and hooks
-- Follow React best practices
-- Use Tailwind CSS for styling
-- Run linter before committing: `npm run lint`
-
-#### Backend Guidelines
-
-- Follow PEP 8 style guide for Python code
-- Add appropriate error handling
-- Document API endpoints with proper docstrings
-- Test API endpoints manually or with automated tests
-
-### 4. Commit Your Changes
-
-Write clear and meaningful commit messages:
+5. **Create a Branch**
 
 ```bash
+git checkout -b fix-typo-homepage
+```
+
+6. **Make Your Changes**
+- Keep components small and readable
+- Follow existing patterns (don’t freestyle)
+- Use Tailwind utilities instead of random CSS
+- Don’t hardcode colors — use CSS variables
+
+7. **Lint, Build, Commit**
+
+**For Frontend:**
+```bash
+cd frontend
+npm run lint
+npm run build
 git add .
-git commit -m "feat: add student search functionality"
-# or
-git commit -m "fix: resolve attendance marking bug"
-# or
-git commit -m "docs: update README with setup instructions"
+git commit -m "Improve: dashboard card spacing"
+git push origin feature/improve-dashboard-ui
 ```
 
-Commit message format:
-- `feat:` - A new feature
-- `fix:` - A bug fix
-- `docs:` - Documentation changes
-- `style:` - Code style changes (formatting, etc.)
-- `refactor:` - Code refactoring
-- `test:` - Adding or updating tests
-- `chore:` - Maintenance tasks
-
-### 5. Push Your Changes
-
+**For Backend Services (Python):**
 ```bash
-git push origin your-branch-name
+# Python linting is optional - follow existing code style
+git add .
+git commit -m "Fix: attendance API endpoint"
+git push origin feature/fix-attendance-api
 ```
 
-### 6. Create a Pull Request
+If lint fails → fix it. No shortcuts.
 
-1. Go to your fork on GitHub
-2. Click "Compare & Pull Request"
-3. Fill in the PR template with:
-   - **Description**: What changes did you make?
-   - **Related Issue**: Link the issue number (e.g., "Fixes #123")
-   - **Screenshots**: If applicable, add before/after screenshots
-   - **Testing**: Describe how you tested your changes
-
-4. Submit the pull request
-
-## 📋 Pull Request Guidelines
-
-- Keep PRs focused on a single issue or feature
-- Update documentation if needed
-- Ensure your code is properly tested
+8. **Create a Pull Request**
+- Explain what you changed
+- Explain why
 - Add screenshots for UI changes
-- Link the related issue in your PR description
-- Be responsive to review comments
-- Keep your PR up to date with the main branch
+- Link the issue (if any)
 
-## 🔄 Keeping Your Fork Updated
 
-Regularly sync your fork with the upstream repository:
+9. **Keep Fork Updated**
 
-```bash
+```
 git fetch upstream
 git checkout main
 git merge upstream/main
 git push origin main
 ```
 
-## 💡 Contribution Ideas
+---
 
-Not sure where to start? Here are some ideas:
+## ✅ Contribution Rules
 
-- 🐛 Fix bugs or issues
-- ✨ Add new features
-- 📝 Improve documentation
-- 🎨 Enhance UI/UX
-- ♿ Improve accessibility
-- 🧪 Add tests
-- 🔧 Optimize performance
-- 🌐 Add internationalization support
+- 🔹 Work on only one issue at a time
+- 🔹 Wait to be **assigned** before working on an issue
+- 🔹 Write **clear commit messages** (`Type: Description`)
+- 🔹 Test your changes thoroughly before creating a PR
+- 🔹 Be respectful and inclusive in all discussions
+- 🔹 Use screenshots for UI-related PRs
+
+---
+
+## 📌 Pull Request Checklist
+
+Use this PR template when submitting:
+
+```md
+## What I Changed
+- [Explain what you did]
+
+## Why It Was Needed
+- [Reason behind the change]
+
+## How to Test
+1. Go to...
+2. Perform...
+3. You should see...
+
+## Screenshots (if applicable)
+![before](url) ![after](url)
+
+Fixes #<issue-number>
+```
+
+✅ PR Title Examples:
+- `Fix: Navbar menu not opening on mobile`
+- `Add: New badge system for users`
+- `Update: README with better setup guide`
+
+---
+
+## 🐞 Creating & Reporting Issues
+
+### Bug Report Template
+
+```md
+## Bug Description
+[What’s broken?]
+
+## Steps to Reproduce
+1. Go to...
+2. Click on...
+3. Observe...
+
+## Expected Behavior
+[What should happen?]
+
+## Screenshots
+[Add if helpful]
+
+## System Info
+- OS: [Windows/Mac/Linux]
+- Browser: [Chrome/Firefox/Safari]
+```
+
+### Feature Request Template
+
+```md
+## Feature Description
+[What you want to add]
+
+## Why It's Useful
+[How it helps users]
+
+## Possible Implementation
+[Ideas for how it might work]
+```
+
 
 ## 🆘 Need Help?
 
 - Check out the [learn.md](./learn.md) file for detailed Git and GitHub tutorials
 - Open a discussion in the Issues tab
 - Reach out to maintainers
-- Join our community channels (if available)
 
 ## ✅ Code Review Process
 

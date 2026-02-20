@@ -1,6 +1,87 @@
 /* frontend/src/index.css */
 @import "tailwindcss";
+@import "tw-animate-css";
 
+/* Custom theme extensions for responsive breakpoints */
+@theme {
+  /* Add xs breakpoint for extra small screens (480px) */
+  --breakpoint-xs: 480px;
+}
+
+/* Accessibility: Skip Link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #4F46E5;
+  color: white;
+  padding: 8px 16px;
+  text-decoration: none;
+  z-index: 100;
+  border-radius: 0 0 4px 0;
+  font-weight: 600;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* DEFAULT (Light) */
+:root,
+[data-theme="Light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #e5e7eb;
+  --bg-card: #ffffff;
+
+  --text-main: #0f172a;
+  --text-body: #475569;
+
+  --border-color: #e5e7eb;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+}
+
+/* Dark Theme */
+[data-theme="Dark"] {
+  --bg-primary: #020617;
+  --bg-secondary: #020617;
+  --bg-card: #020617;
+
+  --text-main: #f8fafc;
+  --text-body: #cbd5f5;
+
+  --border-color: #334155;
+  --primary: #60a5fa;
+  --primary-hover: #93c5fd;
+}
+
+/* Forest */
+[data-theme="Forest"] {
+  --bg-primary: #022c22;
+  --bg-secondary: #064e3b;
+  --bg-card: #064e3b;
+
+  --text-main: #ecfdf5;
+  --text-body: #a7f3d0;
+
+  --border-color: #047857;
+  --primary: #34d399;
+  --primary-hover: #6ee7b7;
+}
+
+/* Cyber */
+[data-theme="Cyber"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-card: #020617;
+
+  --text-main: #22d3ee;
+  --text-body: #67e8f9;
+
+  --border-color: #164e63;
+  --primary: #06b6d4;
+  --primary-hover: #22d3ee;
+}
 
 
 /* Theme variables (light default) */
@@ -30,6 +111,16 @@
   /* Borders */
   --border-color: #E5E7EB;
   /* Subtle grey borders */
+
+  /* danger */
+  --danger: #ef4444;
+
+  --action-info-bg: #2563eb;
+  --action-info-hover: #1d4ed8;
+  --success: #10b981;  /* emerald-500 */
+  --warning: #f59e0b;  /* amber-500 */
+
+  --overlay: rgba(0, 0, 0, 0.5);
 }
 
 /* Modern Dark */
@@ -56,6 +147,19 @@
 
   /* Borders */
   --border-color: #334155;
+
+  /* Danger */
+  --danger: #ef4444;
+
+    /* Action colors */
+  --success: #22c55e;       /* green-500 */
+  --warning: #f59e0b;       /* amber-500 */
+  --action-info-bg: #2563eb;      /* reuse existing hover (darker) */
+  --action-info-hover: #3b82f6;   /* optional: keep hover lighter */
+
+
+  --overlay: rgba(0, 0, 0, 0.6);
+
 }
 
 /* Forest theme */
@@ -79,6 +183,19 @@
 
   /* Borders */
   --border-color: #BBF7D0;
+
+  /* Danger */
+  --danger: #ef4444;
+
+    /* Action colors */
+  --success: #16a34a;       /* green-600 */
+  --warning: #d97706;       /* amber-600 */
+  --action-info-bg: #059669;     /* base action info background (lighter) */
+  --action-info-hover: #047857;  /* darker hover state for action info */
+
+
+  --overlay: rgba(20, 83, 45, 0.4);
+
 }
 
 /* Cyber tech theme */
@@ -104,6 +221,18 @@
 
   /* Borders */
   --border-color: #4C1D95;
+
+  /* Danger */
+  --danger: #ef4444;
+   
+    /* Action colors */
+  --success: #34d399;        /* neon mint */
+  --warning: #fbbf24;        /* bright amber */
+  --action-info-bg: #a855f7; /* neon purple */
+  --action-info-hover: #9333ea;
+
+  --overlay: rgba(18, 11, 46, 0.7);
+
 }
 
 
@@ -113,8 +242,8 @@ html,
 body,
 #root {
   height: 100%;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
@@ -122,18 +251,19 @@ body,
 
 /* small reusable components */
 .btn-primary {
-  @apply px-6 py-2 rounded-xl text-white font-medium;
-  background: var(--color-primary);
+  @apply px-6 py-2 rounded-xl font-medium;
+  background: var(--primary);
+  color: var(--text-on-primary);
   box-shadow: 0 8px 24px rgba(58, 122, 254, 0.12);
 }
 
 .btn-ghost {
   @apply px-4 py-2 rounded-lg border;
-  border-color: rgba(0, 0, 0, 0.06);
+  border-color: var(--border-color);
   background: transparent;
 }
 
 .card {
-  @apply bg-[var(--color-surface)] p-6 rounded-xl shadow-md;
-  border: 1px solid rgba(16, 24, 40, 0.04);
+  @apply bg-[var(--bg-card)] p-6 rounded-xl shadow-md;
+  border: 1px solid var(--border-color);
 }

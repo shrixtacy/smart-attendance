@@ -1,33 +1,59 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 export default function FaceOverlay({ faces, videoRef }) {
-  if (!videoRef.current) return null;
+  const [videoDimensions, setVideoDimensions] = useState(null);
 
-  const video = videoRef.current.video;
-  if (!video || !video.videoWidth) return null;
+  useEffect(() => {
+    if (videoRef.current && videoRef.current.video && videoRef.current.video.videoWidth) {
+      const videoEl = videoRef.current.video;
+      const newDims = {
+        width: videoEl.videoWidth,
+        height: videoEl.videoHeight,
+        displayWidth: videoEl.clientWidth,
+        displayHeight: videoEl.clientHeight
+      };
 
-  const rect = video.getBoundingClientRect();
-  const scaleX = rect.width / video.videoWidth;
-  const scaleY = rect.height / video.videoHeight;
+      setVideoDimensions(prev => {
+        if (!prev || 
+            prev.width !== newDims.width || 
+            prev.height !== newDims.height || 
+            prev.displayWidth !== newDims.displayWidth || 
+            prev.displayHeight !== newDims.displayHeight) {
+          return newDims;
+        }
+        return prev;
+      });
+    }
+  }, [faces, videoRef]); // Re-check when faces change or videoRef changes
+
+  if (!videoDimensions) return null;
+
+  const { width: videoWidth, height: videoHeight, displayWidth, displayHeight } = videoDimensions;
+
+  const scaleX = displayWidth / videoWidth;
+  const scaleY = displayHeight / videoHeight;
 
   return (
-    <div className="absolute inset-0 pointer-events-none">
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: displayWidth, height: displayHeight }}
+    >
       {faces.map((f, idx) => {
         const { top, right, bottom, left } = f.box;
 
         const boxWidth = (right - left) * scaleX;
         const boxHeight = (bottom - top) * scaleY;
 
-        // mirror fix
-        const mirroredLeft = rect.width - right * scaleX;
+        // ✅ correct mirror handling
+        const x = (videoWidth - right) * scaleX;
+        const y = top * scaleY;
 
-        // status-based UI
         const color =
           f.status === "present"
-            ? "#22c55e" // green
+            ? "var(--success)"
             : f.status === "uncertain"
-            ? "#f59e0b" // amber
-            : "#ef4444"; // red
+            ? "var(--warning)"
+            : "var(--danger)";
 
         const label =
           f.status === "present"
@@ -41,23 +67,23 @@ export default function FaceOverlay({ faces, videoRef }) {
             key={idx}
             style={{
               position: "absolute",
-              left: mirroredLeft,
-              top: top * scaleY,
-              width: boxWidth,
-              height: boxHeight,
+              left: `${x}px`,
+              top: `${y}px`,
+              width: `${boxWidth}px`,
+              height: `${boxHeight}px`,
               border: `2px solid ${color}`,
               borderRadius: "8px",
               background: `${color}20`,
+              boxSizing: "border-box",
             }}
           >
-            {/* Label */}
             <div
               style={{
                 position: "absolute",
                 top: "-18px",
                 left: 0,
                 background: color,
-                color: "#fff",
+                color: "var(--text-on-primary)",
                 fontSize: "10px",
                 padding: "2px 6px",
                 borderRadius: "4px",

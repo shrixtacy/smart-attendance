@@ -1,11 +1,9 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { 
   Download, 
   FileText, 
   ArrowUpRight, 
-  AlertTriangle, 
   Clock, 
-  Calendar,
   ChevronDown
 } from "lucide-react";
 import { 
@@ -18,9 +16,12 @@ import {
   ResponsiveContainer,
   PieChart,
   Pie,
-  Cell,
-  Legend
+  Cell
 } from "recharts";
+import { useTranslation } from "react-i18next";
+import { fetchSubjectAnalytics } from "../api/analytics";
+import { fetchMySubjects } from "../api/teacher";
+import Spinner from "../components/Spinner";
 
 // --- Mock Data ---
 
@@ -33,254 +34,399 @@ const TREND_DATA = [
 ];
 
 const DISTRIBUTION_DATA = [
-  { name: 'Present', value: 72, color: '#10B981' }, // emerald-500
-  { name: 'Late', value: 9, color: '#F59E0B' },    // amber-500
-  { name: 'Absent', value: 19, color: '#EF4444' },  // red-500
+  { name: 'Present', value: 72, color: "var(--success)" }, 
+  { name: 'Late', value: 9, color: "var(--warning)" },    
+  { name: 'Absent', value: 19, color: "var(--danger)" },  
 ];
 
-const CLASS_PERFORMANCE = [
+const GLOBAL_STATS = {
+  attendance: 89,
+  avgLate: 7,
+  riskCount: 3,
+  lateTime: '09:15 AM'
+};
+
+const GLOBAL_LEADERBOARD_BEST = [
   { name: 'Grade 9A', score: 91 },
   { name: 'Grade 10A', score: 88 },
   { name: 'Grade 8C', score: 86 },
 ];
 
-const CLASS_RISK = [
+const GLOBAL_LEADERBOARD_RISK = [
   { name: 'Grade 11C', score: 71 },
   { name: 'Grade 12B', score: 68 },
   { name: 'Grade 7D', score: 73 },
 ];
 
 const CLASS_BREAKDOWN = [
-  { class: 'Grade 10A', students: 32, present: 88, late: 7, absent: 5, color: 'emerald' },
-  { class: 'Grade 10B', students: 30, present: 82, late: 9, absent: 9, color: 'amber' },
-  { class: 'Grade 9A', students: 28, present: 91, late: 5, absent: 4, color: 'emerald' },
-  { class: 'Grade 11C', students: 29, present: 71, late: 11, absent: 18, color: 'red' },
+  { class: 'Grade 10A', students: 32, present: 88, late: 7, absent: 5, color: "var(--success)" },
+  { class: 'Grade 10B', students: 30, present: 82, late: 9, absent: 9, color: "var(--warning)" },
+  { class: 'Grade 9A', students: 28, present: 91, late: 5, absent: 4, color: "var(--success)" },
+  { class: 'Grade 11C', students: 29, present: 71, late: 11, absent: 18, color: "var(--danger)" },
 ];
 
 export default function Analytics() {
+  const { t } = useTranslation();
+  const [selectedPeriod, setSelectedPeriod] = useState("Month");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState("all");
+  const dropdownRef = useRef(null);
+
+  const periodOptions = ["Week", "Month", "Semester"];
+  const periodLabels = {
+    "Week": t('analytics.chart.week'),
+    "Month": t('analytics.chart.month'),
+    "Semester": t('analytics.chart.semester')
+  };
+
+  const [subjects, setSubjects] = useState([]);
+  const [stats, setStats] = useState(GLOBAL_STATS);
+  const [bestPerforming, setBestPerforming] = useState(GLOBAL_LEADERBOARD_BEST);
+  const [needingSupport, setNeedingSupport] = useState(GLOBAL_LEADERBOARD_RISK);
+  const [loading, setLoading] = useState(false);
+
+  // Handle outside click to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+  // Fetch subjects on mount
+  useEffect(() => {
+    fetchMySubjects()
+      .then(data => {
+        // Map _id to id to match expectation if needed, or just use _id
+        const mapped = data.map(s => ({ ...s, id: s._id }));
+        setSubjects(mapped);
+      })
+      .catch(console.error);
+  }, []);
+
+  const handlePeriodChange = (period) => {
+    setSelectedPeriod(period);
+    setIsDropdownOpen(false);
+    // TODO: Trigger data fetch when backend is ready
+  };
+  
+  // Logic for dynamic stats based on selection
+  const isGlobal = selectedSubject === 'all';
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadAnalytics = async () => {
+      if (isGlobal) {
+        // Avoid synchronous state updates in effect
+        await Promise.resolve();
+        if (isMounted) {
+            setStats(GLOBAL_STATS);
+            setBestPerforming(GLOBAL_LEADERBOARD_BEST);
+            setNeedingSupport(GLOBAL_LEADERBOARD_RISK);
+        }
+      } else {
+        setLoading(true);
+        try {
+          const data = await fetchSubjectAnalytics(selectedSubject);
+            if (isMounted) {
+              setStats({
+                attendance: data.attendance || 0,
+                avgLate: data.avgLate || 0,
+                riskCount: data.riskCount || 0,
+                lateTime: data.lateTime || "N/A"
+              });
+              setBestPerforming(data.bestPerforming || []);
+              setNeedingSupport(data.needsSupport || []);
+            }
+        } catch (err) {
+            if (isMounted) {
+                 console.error("Failed to fetch analytics:", err);
+            }
+        } finally {
+            if(isMounted) setLoading(false);
+        }
+      }
+    };
+
+    loadAnalytics();
+
+    return () => { isMounted = false; };
+  }, [selectedSubject, isGlobal]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
+        <Spinner />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      
-      {/* --- HEADER --- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[var(--text-main)]">Analytics</h2>
-          <p className="text-[var(--text-body)]">Track attendance trends over time and compare classes</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
-            <Download size={18} />
-            Export analytics
-          </button>
-          <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2 shadow-sm transition cursor-pointer">
-            <FileText size={18} />
-            Generate report
-          </button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+        {/* --- HEADER --- */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-[var(--text-main)]">{t('analytics.title')}</h2>
+            <p className="text-[var(--text-body)]">{t('analytics.subtitle')}</p>
+          </div>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+            {/* Subject Selector Dropdown */}
+            <select
+              value={selectedSubject}
+              onChange={(e) => setSelectedSubject(e.target.value)}
+              className="w-full sm:w-auto px-4 py-2 bg-[var(--bg-card)] text-[var(--text-main)] border border-[var(--border-color)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium shadow-sm transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+            >
+              <option value="all">All Subjects</option>
+              {subjects.map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name} ({subject.code})
+                </option>
+              ))}
+            </select>
 
-      {/* --- TOP STATS ROW --- */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Stat 1 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">Overall attendance this month</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">89 <span className="text-lg font-normal text-gray-500">%</span></h3>
-          </div>
-          <div className="flex items-center text-xs font-semibold text-emerald-600">
-            <ArrowUpRight size={14} className="mr-1" />
-            +3% vs last month
-          </div>
-        </div>
-
-        {/* Stat 2 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">Average late arrivals</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">7</h3>
-            <span className="text-sm text-gray-500 mb-2">per week</span>
-          </div>
-          <div className="flex items-center text-xs font-medium text-gray-400">
-            <Clock size={14} className="mr-1" />
-            Average time: 09:15 AM
-          </div>
-        </div>
-
-        {/* Stat 3 */}
-        <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-          <p className="text-sm font-medium text-[var(--text-body)] mb-2">Classes at risk (&lt; 75%)</p>
-          <div className="flex items-end gap-3 mb-1">
-            <h3 className="text-4xl font-bold text-[var(--text-main)]">3</h3>
-            <span className="text-sm text-gray-500 mb-2">sections</span>
-          </div>
-          <div className="flex items-center text-xs font-semibold text-emerald-600">
-             <span className="text-gray-500 mr-1">1 more than last month</span>
-          </div>
-        </div>
-      </div>
-
-      {/* --- MIDDLE SECTION: CHARTS --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Main Trend Chart (Left - 2 Cols) */}
-        <div className="lg:col-span-2 bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h3 className="font-bold text-lg text-[var(--text-main)]">Attendance trend</h3>
-              <p className="text-sm text-[var(--text-body)]">Weekly attendance for the selected range</p>
+            <div className="flex gap-2 sm:gap-3">
+              <button className="flex-1 sm:flex-none px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center justify-center gap-2 shadow-sm transition cursor-pointer text-sm sm:text-base">
+                <Download size={18} />
+                <span className="hidden xs:inline">{t('analytics.export')}</span>
+              </button>
+              <button className="flex-1 sm:flex-none px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--action-info-hover)] font-medium flex items-center justify-center gap-2 shadow-sm transition cursor-pointer text-sm sm:text-base">
+                <FileText size={18} />
+                <span className="hidden xs:inline">{t('analytics.generate_report')}</span>
+              </button>
             </div>
-            <div className="flex gap-2">
-               <button className="text-sm text-gray-500 flex items-center gap-1 hover:bg-gray-50 px-2 py-1 rounded">
-                 This month <ChevronDown size={14}/>
-               </button>
-               <button className="text-sm text-[var(--primary)] font-medium hover:underline">Reset</button>
+          </div>
+        </div>
+
+        {/* --- TOP STATS ROW --- */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Stat 1 */}
+          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.overall') : t('analytics.stats.class_attendance')}
+            </p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.attendance} <span className="text-lg font-normal text-[var(--text-body)]">%</span></h3>
+            </div>
+            <div className="flex items-center text-xs font-semibold text-[var(--success)]">
+              <ArrowUpRight size={14} className="mr-1" />
+              {t('analytics.stats.increase')}
             </div>
           </div>
 
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={TREND_DATA}>
-                <defs>
-                  <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9CA3AF', fontSize: 12}} />
-                <Tooltip 
-                  contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)'}}
-                />
-                <Area type="monotone" dataKey="present" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorPresent)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          {/* Stat 2 */}
+          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">{t('analytics.stats.avg_late')}</p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.avgLate}</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">{t('analytics.stats.per_week')}</span>
+            </div>
+            <div className="flex items-center text-xs font-medium text-[var(--text-body)] opacity-70">
+              <Clock size={14} className="mr-1" />
+              {t('analytics.stats.avg_time', {time: stats.lateTime})}
+            </div>
+          </div>
+
+          {/* Stat 3 */}
+          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <p className="text-sm font-medium text-[var(--text-body)] mb-2">
+              {isGlobal ? t('analytics.stats.at_risk') : t('analytics.stats.students_at_risk')}
+            </p>
+            <div className="flex items-end gap-3 mb-1">
+              <h3 className="text-4xl font-bold text-[var(--text-main)]">{stats.riskCount}</h3>
+              <span className="text-sm text-[var(--text-body)] mb-2">
+                {isGlobal ? t('analytics.stats.sections') : t('analytics.stats.students_count')}
+              </span>
+            </div>
+            <div className="flex items-center text-xs font-semibold text-[var(--success)]">
+               <span className="text-[var(--text-body)] mr-1">{t('analytics.stats.more_than_last_month')}</span>
+            </div>
           </div>
         </div>
 
-        {/* Side Panel (Right - 1 Col) */}
-        <div className="space-y-6">
-          
-          {/* Donut Chart */}
-          <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-[var(--text-main)] mb-1">Present / Late / Absent</h3>
-            <p className="text-xs text-[var(--text-body)] mb-4">Distribution for the selected period</p>
-            
-            <div className="flex items-center justify-between">
-              <div className="h-32 w-32 relative">
-                {/* Centered Text for Donut */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                  <span className="text-xl font-bold text-[var(--text-main)]">89%</span>
-                  <span className="text-[10px] text-gray-500">avg</span>
-                </div>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={DISTRIBUTION_DATA}
-                      innerRadius={45}
-                      outerRadius={60}
-                      paddingAngle={5}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {DISTRIBUTION_DATA.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
+        {/* --- MIDDLE SECTION: CHARTS --- */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          {/* Main Trend Chart (Left - 2 Cols) */}
+          <div className="lg:col-span-2 bg-[var(--bg-card)] p-4 sm:p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="font-bold text-lg text-[var(--text-main)]">{t('analytics.chart.trend_title')}</h3>
+                <p className="text-sm text-[var(--text-body)]">{t('analytics.chart.trend_desc')}</p>
               </div>
-
-              {/* Custom Legend */}
-              <div className="space-y-2">
-                {DISTRIBUTION_DATA.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs w-28">
-                     <div className="flex items-center gap-2">
-                       <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
-                       <span className="text-gray-600">{item.name}</span>
-                     </div>
-                     <span className="font-bold text-gray-900">{item.value}%</span>
+              {/* --- DROPDOWN SECTION (Fixed) --- */}
+              <div className="flex gap-2 items-center">
+                <div className="relative" ref={dropdownRef}>
+                  <button 
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="text-sm text-[var(--text-body)] flex items-center gap-1 hover:bg-[var(--bg-secondary)] px-3 py-1.5 rounded border border-[var(--border-color)] transition"
+                  >
+                    {periodLabels[selectedPeriod]} <ChevronDown size={14} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}/>
+                  </button>
+                  {isDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg shadow-lg z-10 w-32 overflow-hidden">
+                      {periodOptions.map((option) => (
+                        <button
+                          key={option}
+                          onClick={() => handlePeriodChange(option)}
+                          className={`w-full text-left px-4 py-2 text-sm transition ${
+                            selectedPeriod === option
+                              ? 'bg-[var(--primary)] text-[var(--text-on-primary)] font-medium'
+                              : 'text-[var(--text-main)] hover:bg-[var(--bg-secondary)]'
+                          }`}
+                        >
+                          {periodLabels[option]}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setSelectedPeriod("Month")} 
+                  className="text-sm text-[var(--primary)] font-medium hover:underline"
+                >
+                  {t('analytics.chart.reset')}
+                </button>
+              </div>
+              {/* --- END DROPDOWN SECTION --- */}
+            </div>
+            <div className="h-[250px] sm:h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={TREND_DATA} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-body)', fontSize: 12}} />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '8px', border: '1px solid var(--border-color)', backgroundColor: "var(--bg-card)", color: "var(--text-main)",}}
+                  />
+                  <Area type="monotone" dataKey="present" stroke="var(--primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorPresent)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          {/* Side Panel (Right - 1 Col) */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Donut Chart */}
+            <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-xl border border-[var(--border-color)] shadow-sm">
+              <h3 className="font-bold text-[var(--text-main)] mb-1">{t('analytics.donut.title')}</h3>
+              <p className="text-xs text-[var(--text-body)] mb-4">{t('analytics.donut.subtitle')}</p>
+              <div className="flex flex-col xs:flex-row items-center justify-between gap-4">
+                <div className="h-32 w-32 relative">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-xl font-bold text-[var(--text-main)]">89%</span>
+                    <span className="text-[10px] text-[var(--text-body)] opacity-80">{t('analytics.donut.avg')}</span>
+                  </div>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={DISTRIBUTION_DATA}
+                        innerRadius={45}
+                        outerRadius={60}
+                        paddingAngle={5}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {DISTRIBUTION_DATA.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="space-y-2">
+                  {DISTRIBUTION_DATA.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs w-28">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span>
+                          <span className="text-[var(--text-body)] opacity-80">{t(`trends.${item.name.toLowerCase()}`, item.name)}</span>
+                        </div>
+                        <span className="font-bold text-[var(--text-main)]">{item.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {/* Best Performing List */}
+            <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--border-color)] shadow-sm" data-testid="best-performing-list">
+              <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.best')}</h3>
+              <div className="space-y-3">
+                {bestPerforming.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
+                        <span className="text-[var(--text-body)]">{c.name}</span>
+                      </div>
+                      <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+             {/* Needs Support List */}
+             <div className="bg-[var(--bg-card)] p-4 sm:p-5 rounded-xl border border-[var(--border-color)] shadow-sm" data-testid="needing-support-list">
+              <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">{t('analytics.lists.needs_support')}</h3>
+              <div className="space-y-3">
+                {needingSupport.map((c, i) => (
+                  <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-[10px] font-bold">{i+1}</div>
+                        <span className="text-[var(--text-body)]">{c.name}</span>
+                      </div>
+                      <span className="font-bold text-[var(--text-main)]">{c.score}%</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Best Performing List */}
-          <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">Best performing classes</h3>
-            <div className="space-y-3">
-              {CLASS_PERFORMANCE.map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                   <div className="flex items-center gap-3">
-                     <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-[10px] font-bold">{i+1}</div>
-                     <span className="text-gray-700">{c.name}</span>
-                   </div>
-                   <span className="font-bold text-gray-900">{c.score}%</span>
+        {/* --- BOTTOM SECTION: CLASS BREAKDOWN --- */}
+        <div className="bg-[var(--bg-card)] p-4 sm:p-6 rounded-xl border border-[var(--border-color)] shadow-sm overflow-hidden">
+          <h3 className="font-bold text-lg text-[var(--text-main)] mb-1">{t('analytics.breakdown.title')}</h3>
+          <p className="text-sm text-[var(--text-body)] mb-6">{t('analytics.breakdown.subtitle')}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {CLASS_BREAKDOWN.map((cls, idx) => (
+              <div key={idx} className="p-4 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-[var(--text-main)]">{cls.class}</h4>
+                  <span className="text-xs text-[var(--text-body)] opacity-80">{t('analytics.breakdown.students', {count: cls.students})}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-          
-           {/* Needs Support List */}
-           <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="font-semibold text-sm text-[var(--text-main)] mb-3">Classes needing support</h3>
-            <div className="space-y-3">
-              {CLASS_RISK.map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                   <div className="flex items-center gap-3">
-                     <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">{i+1}</div>
-                     <span className="text-gray-700">{c.name}</span>
-                   </div>
-                   <span className="font-bold text-gray-900">{c.score}%</span>
+                {/* Progress Bar Container */}
+                <div className="h-4 w-full bg-[var(--bg-card)] rounded-full flex overflow-hidden shadow-inner mb-2">
+                  <div 
+                    className="h-full" 
+                    style={{width: `${cls.present}%`, backgroundColor: cls.color}}
+                  ></div>
+                  <div className="h-full bg-[var(--warning)]/40" style={{width: `${cls.late}%`}}></div>
+                  <div className="h-full bg-[var(--danger)]/40" style={{width: `${cls.absent}%`}}></div>
                 </div>
-              ))}
-            </div>
+                <div className="flex justify-between items-center text-xs">
+                    <span className="px-2 py-0.5 rounded text-[var(--text-on-primary)] font-bold" style={{ backgroundColor: cls.color }}>
+                      {t('analytics.breakdown.present_val', {val: cls.present})}
+                    </span>
+                    <span className="text-[var(--text-body)] opacity-80">
+                      {t('analytics.breakdown.late_absent', {late: cls.late, absent: cls.absent})}
+                    </span>
+                </div>
+              </div>
+            ))}
           </div>
-
         </div>
       </div>
-
-      {/* --- BOTTOM SECTION: CLASS BREAKDOWN --- */}
-      <div className="bg-[var(--bg-card)] p-6 rounded-xl border border-gray-100 shadow-sm">
-        <h3 className="font-bold text-lg text-[var(--text-main)] mb-1">Class-wise breakdown</h3>
-        <p className="text-sm text-[var(--text-body)] mb-6">Percentage of present, late, and absent students per class</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {CLASS_BREAKDOWN.map((cls, idx) => (
-            <div key={idx} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-[var(--text-main)]">{cls.class}</h4>
-                <span className="text-xs text-gray-500">{cls.students} students</span>
-              </div>
-              
-              {/* Progress Bar Container */}
-              <div className="h-4 w-full bg-white rounded-full flex overflow-hidden shadow-inner mb-2">
-                {/* Present */}
-                <div 
-                  className={`h-full ${cls.color === 'red' ? 'bg-rose-500' : cls.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} 
-                  style={{width: `${cls.present}%`}}
-                ></div>
-                {/* Late */}
-                <div className="h-full bg-amber-300" style={{width: `${cls.late}%`}}></div>
-                {/* Absent */}
-                <div className="h-full bg-rose-300" style={{width: `${cls.absent}%`}}></div>
-              </div>
-
-              <div className="flex justify-between items-center text-xs">
-                 <span className={`px-2 py-0.5 rounded text-white font-bold ${cls.color === 'red' ? 'bg-rose-500' : cls.color === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`}>
-                   {cls.present}% present
-                 </span>
-                 <span className="text-gray-500">
-                   {cls.late}% late · {cls.absent}% absent
-                 </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
     </div>
   );
 }

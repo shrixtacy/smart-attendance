@@ -10,36 +10,40 @@
 Thumbs.db
 
 # =========================
-# GIT
+# PYTHON (server)
 # =========================
-.git/
-.gitignore
+server/.venv/
+server/venv/
+server/backend-api/.venv/
+server/backend-api/venv/
+server/ml-service/.venv/
+server/__pycache__/
+server/**/*.pyc
+server/**/*.pyo
+server/**/*.pyd
+server/**/*.so
+server/.pytest_cache/
+server/.mypy_cache/
+server/.ruff_cache/
+server/**/.coverage
+server/**/htmlcov/
 
-# =========================
-# PYTHON (BACKEND)
-# =========================
-backend/.venv/
-backend/venv/
-backend/__pycache__/
-backend/**/*.pyc
-backend/**/*.pyo
-backend/**/*.pyd
-backend/**/*.so
-backend/.pytest_cache/
-backend/.mypy_cache/
-backend/.ruff_cache/
+# ML Models (downloaded at build/runtime)
+# Note: blaze_face_short_range.tflite is downloaded by download_models.py
+# DO NOT commit large model files - they should be fetched during deployment
+server/ml-service/app/ml/*.tflite
 
 # ENV FILES (NEVER COMMIT)
-backend/.env
-backend/*.env
+server/.env
+server/*.env
 
 # =========================
 # FASTAPI / UVICORN
 # =========================
-backend/logs/
-backend/uploads/
-backend/faces/
-backend/images/
+server/logs/
+server/uploads/
+server/faces/
+server/images/
 
 # =========================
 # NODE / FRONTEND
@@ -59,15 +63,11 @@ frontend/.cache/
 *.swo
 
 # =========================
-# DOCKER
-# =========================
-**/.dockerignore
-docker-compose.yml
-
-# =========================
-# SYSTEM
+# SYSTEM FILES
 # =========================
 *.zip
 *.tar
 *.gz
 *.rar
+demo_user_id.txt
+

@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from "react";
-import { 
-  Info, 
-  Sliders, 
-  Camera, 
-  Moon, 
-  Sun, 
-  Monitor, 
-  Bell, 
-  Volume2, 
-  Check, 
-  Plus, 
+import React, { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Info,
+  Sliders,
+  Camera,
+  Moon,
+  Sun,
+  Monitor,
+  Bell,
+  Volume2,
+  Check,
+  Plus,
   X,
   Upload,
   RefreshCw,
@@ -17,54 +18,195 @@ import {
   Trash2,
   Share2,
   Sparkles,
-  Code,
-  Palette,
-  Aperture,
-  TreePine
+  TreePine,
 } from "lucide-react";
 import SettingsSidebar from "../components/SettingsSidebar";
+import LogoutConfirmDialog from "../components/LogoutConfirmDialog";
 import { useTheme } from "../theme/ThemeContext";
-import {getSettings, patchSettings, uploadAvatar, addSubject} from "../api/settings"
-import AddSubjectModal from "../components/AddSubjectModal"
+import {
+  getSettings,
+  patchSettings,
+  uploadAvatar,
+  addSubject,
+  sendLowAttendanceNotice,
+} from "../api/settings";
+import { logout as apiLogout } from "../api/auth";
+import AddSubjectModal from "../components/AddSubjectModal";
+import { useTranslation } from "react-i18next";
+import toast from "react-hot-toast";
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState("Thresholds");
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState("general");
 
   const [showSubjectModal, setShowSubjectModal] = useState(false);
 
-  
   // State for Thresholds
   const [warningVal, setWarningVal] = useState(75);
   const [safeVal, setSafeVal] = useState(85);
+  const sliderRef = useRef(null);
+  const [dragging, setDragging] = useState(null); // 'warning' | 'safe' | null
+
+  useEffect(() => {
+    const handleUp = () => setDragging(null);
+    const handleMove = (e) => {
+      if (!dragging || !sliderRef.current) return;
+
+      const rect = sliderRef.current.getBoundingClientRect();
+      const percent = Math.min(Math.max(0, ((e.clientX - rect.left) / rect.width) * 100), 100);
+
+      if (dragging === 'warning') {
+        const newVal = Math.round(percent);
+        // Ensure warning doesn't cross safe
+        if (newVal < safeVal - 1) { // keep at least 1% gap
+          setWarningVal(newVal);
+        }
+      } else if (dragging === 'safe') {
+        const newVal = Math.round(percent);
+        // Ensure safe doesn't cross warning
+        if (newVal > warningVal + 1) { // keep at least 1% gap
+          setSafeVal(newVal);
+        }
+      }
+    };
+
+    if (dragging) {
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragging, warningVal, safeVal]);
+
 
   // State for Theme
-  const {theme, setTheme} = useTheme();
+  const { theme, setTheme } = useTheme();
 
   // Notifications
-  const [notifications, setNotifications] = useState({ push: true, inApp: true, sound: false });
+  const [notifications, setNotifications] = useState({
+    push: true,
+    inApp: true,
+    sound: false,
+  });
 
   // State for Face Settings
   const [liveness, setLiveness] = useState(true);
   const [sensitivity, setSensitivity] = useState(80);
+  const sensitivityTimeoutRef = useRef(null);
 
   // State for email preff
-  const [emailPreferences, setEmailPreferences] = useState(false)
+  const [_emailPreferences, setEmailPreferences] = useState(false);
+
+  // Contributors state
+  const [contributors, setContributors] = useState([]);
+  const [loadingContributors, setLoadingContributors] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "credits") {
+      setLoadingContributors(true);
+      fetch("https://api.github.com/repos/udaykiran243/smart-attendance/contributors")
+        .then((res) => res.json())
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setContributors(data);
+          }
+        })
+        .catch((err) => console.error("Failed to fetch contributors:", err))
+        .finally(() => setLoadingContributors(false));
+    }
+  }, [activeTab]);
+
+  // Handler to toggle email preferences
+  const toggleEmailPref = (key) => {
+    setEmailPreferences((prev) => {
+      // If array doesn't exist, create it
+      const currentPrefs = Array.isArray(prev) ? [...prev] : [];
+      const existingIndex = currentPrefs.findIndex((p) => p.key === key);
+
+      if (existingIndex >= 0) {
+        // Toggle existing
+        currentPrefs[existingIndex] = {
+          ...currentPrefs[existingIndex],
+          enabled: !currentPrefs[existingIndex].enabled
+        };
+      } else {
+        // Add new (default to true if adding, but logic suggests we are enabling it)
+        currentPrefs.push({ key, enabled: true });
+      }
+      return currentPrefs;
+    });
+  };
 
   // --- helper functions (inside your component) ---
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [sendingNotice, setSendingNotice] = useState(false);
+  const [noticeResult, setNoticeResult] = useState(null);
+
+  async function handleSendLowAttendanceNotice() {
+    setSendingNotice(true);
+    setNoticeResult(null);
+    try {
+      const res = await sendLowAttendanceNotice();
+      setNoticeResult({
+        success: true,
+        message: res.message || "Notices sent successfully",
+      });
+    } catch (err) {
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err.message ||
+        "Failed to send notices";
+      setNoticeResult({ success: false, message: errorMsg });
+    } finally {
+      setSendingNotice(false);
+    }
+  }
 
   // compute initials for avatar fallback
   function getInitials(name) {
     if (!name) return "AJ";
-    return name.split(" ").map(s => s[0]?.toUpperCase()).slice(0,2).join("");
+    return name
+      .split(" ")
+      .map((s) => s[0]?.toUpperCase())
+      .slice(0, 2)
+      .join("");
   }
+  const navigate = useNavigate();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  function handleLogout() {
+    setShowLogoutConfirm(true);
+  }
+
+  async function confirmLogout() {
+    try {
+      await apiLogout();
+    } catch (error) {
+      // Log error for debugging but continue with logout
+      if (import.meta.env.DEV) {
+        console.error("Logout API call failed:", error);
+      }
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("refresh_token");
+      setShowLogoutConfirm(false);
+      toast.success("Logged out successfully");
+      navigate("/login");
+    }
+  }
+
 
   const [profile, setProfile] = useState({
     name: "",
     email: "",
     phone: "",
     role: "",
+    branch: "",
     subjects: [],
     avatarUrl: null,
   });
@@ -72,56 +214,64 @@ export default function Settings() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(null);
 
-  useEffect(() => {
-  let mounted = true;
-
-  async function load() {
-    try {
-      setLoadError(null);
-      setLoaded(false);
-      const data = await getSettings(); // your API helper
-
-      console.log("GET /api/settings response:", data);
-
-      if (!mounted) return;
-
-      setProfile({
-        name: data?.profile?.name ?? "",
-        email: data?.profile?.email ?? "",
-        phone: data?.profile?.phone ?? "",
-        role: data?.profile?.role ?? "",
-        subjects: data?.profile?.subjects ?? [],
-        avatarUrl: data?.profile?.avatarUrl ?? null,
-      });
-
-      setTheme(data?.theme ?? "Light");
-
-      setNotifications({
-        push: data?.notifications?.push ?? true,
-        inApp: data?.notifications?.inApp ?? true,
-        sound: data?.notifications?.sound ?? false,
-      });
-
-      setEmailPreferences(data?.emailPreferences ?? []);
-
-      setWarningVal(data?.thresholds?.warningVal ?? 75);
-      setSafeVal(data?.thresholds?.safeVal ?? 85);
-
-      setSensitivity(data?.faceSettings?.sensitivity ?? 80);
-      setLiveness(data?.faceSettings?.liveness ?? true);
-
-    } catch (err) {
-      console.error("Settings load failed:", err);
-      if (mounted) setLoadError(err.message || String(err));
-    } finally {
-      // always clear loading so UI can render either data or error
-      if (mounted) setLoaded(true);
-    }
+  // Extracted loader function for consistent data handling
+  async function loadProfile(data) {
+    setProfile({
+      name: data?.name ?? "",
+      email: data?.email ?? "",
+      phone: data?.phone ?? "",
+      role: data?.role ?? "",
+      branch: data?.branch ?? "",
+      subjects: data?.subjects ?? [],
+      avatarUrl: data?.avatarUrl ?? null,
+    });
   }
 
-  load();
-  return () => { mounted = false; };
-}, [setTheme]);
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      try {
+        setLoadError(null);
+        setLoaded(false);
+        const data = await getSettings(); // your API helper
+
+        console.log("GET /api/settings response:", data);
+
+        if (!mounted) return;
+
+        // Use consistent loader function
+        await loadProfile(data);
+
+        setTheme(data?.theme ?? data?.settings?.theme ?? "Light");
+
+        setNotifications({
+          push: data?.settings?.notifications?.push ?? true,
+          inApp: data?.settings?.notifications?.inApp ?? true,
+          sound: data?.settings?.notifications?.sound ?? false,
+        });
+
+        setEmailPreferences(data?.settings?.emailPreferences ?? []);
+
+        setWarningVal(data?.settings?.thresholds?.warningVal ?? 75);
+        setSafeVal(data?.settings?.thresholds?.safeVal ?? 85);
+
+        setSensitivity(data?.settings?.faceSettings?.sensitivity ?? 80);
+        setLiveness(data?.settings?.faceSettings?.liveness ?? true);
+      } catch (err) {
+        console.error("Settings load failed:", err);
+        if (mounted) setLoadError(err.message || String(err));
+      } finally {
+        // always clear loading so UI can render either data or error
+        if (mounted) setLoaded(true);
+      }
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [setTheme]);
 
   useEffect(() => {
     if (loaded) console.log("Profile loaded:", profile);
@@ -137,33 +287,41 @@ export default function Settings() {
           name: profile.name,
           phone: profile.phone,
           role: profile.role,
+          branch: profile.branch,
           subjects: profile.subjects,
           avatarUrl: profile.avatarUrl,
-        }
+        },
+        settings: {
+          thresholds: {
+            warningVal,
+            safeVal,
+          },
+          notifications,
+          faceSettings: {
+            liveness,
+            sensitivity,
+          },
+          emailPreferences: _emailPreferences,
+          theme,
+        },
       };
       const updated = await patchSettings(payload); // your API helper
       // update local profile from server response (server returns serialized doc)
-      const serverProfile = updated.profile ?? updated.settings?.profile ?? null;
+      const serverProfile =
+        updated.profile ?? updated.settings?.profile ?? null;
       if (serverProfile) {
-        setProfile({
-          name: serverProfile.name ?? "",
-          email: serverProfile.email ?? "",
-          phone: serverProfile.phone ?? "",
-          role: serverProfile.role ?? "",
-          subjects: serverProfile.subjects ?? [],
-          avatarUrl: serverProfile.avatarUrl ?? null,
-        });
+        await loadProfile(serverProfile);
       }
       // optional: show toast success
     } catch (err) {
       console.error("Save profile failed", err);
-      setSaveError(err.message || "Failed to save profile");
+      setSaveError(err.message || t('settings.alerts.save_failed'));
     } finally {
       setSaving(false);
     }
   }
 
-  // subject handlers
+  // subject handlers - FIXED: removed .profile nesting
   async function handleAddSubject(data) {
     try {
       // 1️⃣ Add subject (backend stores subject_id only)
@@ -172,15 +330,8 @@ export default function Settings() {
       // 2️⃣ Re-fetch full settings (backend returns populated subjects)
       const fresh = await getSettings();
 
-      // 3️⃣ Update profile from server (single source of truth)
-      setProfile({
-        name: fresh.profile?.name ?? "",
-        email: fresh.profile?.email ?? "",
-        phone: fresh.profile?.phone ?? "",
-        role: fresh.profile?.role ?? "",
-        subjects: fresh.profile?.subjects ?? [],
-        avatarUrl: fresh.profile?.avatarUrl ?? null,
-      });
+      // 3️⃣ Update profile from server using consistent loader (FIXED: removed .profile)
+      await loadProfile(fresh);
 
       setShowSubjectModal(false);
     } catch (e) {
@@ -190,516 +341,727 @@ export default function Settings() {
   }
 
 
-  function removeSubject(idx){
-    setProfile(prev => ({...prev, subjects: prev.subjects.filter((_,i) => i != idx)}));
-  }
 
   // avatar upload handler
   async function onAvatarSelected(e) {
     const file = e.target.files?.[0];
-    if(!file) return;
-    try{
+    if (!file) return;
+    try {
       const objectUrl = URL.createObjectURL(file);
-      setProfile(prev => ({...prev, avatarUrl: objectUrl}));
+      setProfile((prev) => ({ ...prev, avatarUrl: objectUrl }));
       const res = await uploadAvatar(file);
 
-      setProfile(prev => ({...prev , avatarUrl: res.avatarUrl ?? prev.avatarUrl}));
-    } catch(err){
+      setProfile((prev) => ({
+        ...prev,
+        avatarUrl: res.avatarUrl ?? prev.avatarUrl,
+      }));
+    } catch {
       console.error("Avatar upload failed");
-      setSaveError("Avatar Upload Failed");
+      setSaveError(t('settings.alerts.avatar_failed'));
     }
   }
+
+  // Debounced sensitivity handler
+  const handleSensitivityChange = (value) => {
+    setSensitivity(value);
+    
+    // Clear previous timeout
+    if (sensitivityTimeoutRef.current) {
+      clearTimeout(sensitivityTimeoutRef.current);
+    }
+    
+    // Set new timeout to update after user stops dragging
+    sensitivityTimeoutRef.current = setTimeout(() => {
+      // Auto-save could be triggered here if needed
+      // For now, it will be saved when user clicks "Apply Changes"
+    }, 500);
+  };
 
   // UI: show a simple loading state until data is loaded
   if (!loaded) {
     return <div className="p-6">Loading settings…</div>;
   }
 
-  if (!loaded) return <div className="p-6">Loading settings…</div>;
-  if (loadError) return <div className="p-6 text-rose-600">Failed to load settings: {loadError}</div>;
+  if (loadError)
+    return (
+      <div className="p-6 text-[var(--danger)]">
+        {t('settings.alerts.load_failed', { error: loadError })}
+      </div>
+    );
+
+  const emailPreferencesList = [
+    { key: "settings.general.email_daily", label: "Daily attendance summary" },
+    { key: "settings.general.email_critical", label: "Critical attendance alerts" },
+    { key: "settings.general.email_updates", label: "Product updates" },
+    { key: "settings.general.email_low_attendance_automated", label: "Automated Monthly Low Attendance Alerts" },
+  ];
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
-
-
-      <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8 animate-in fade-in duration-500">
-        
+    <div className="min-h-screen bg-[var(--bg-primary)]">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Settings for Alex Johnson</h2>
-          <p className="text-slate-500 mt-1">Configure attendance thresholds, profile and face recognition preferences</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-main)]">
+            {t('settings.title', { name: profile?.name || "User" })}
+          </h2>
+          <p className="text-sm sm:text-base text-[var(--text-body)] opacity-90 mt-1">
+            {t('settings.subtitle')}
+          </p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          
-          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
 
-          <div className="flex-1 bg-white rounded-2xl border border-gray-100 shadow-sm p-8 w-full min-h-[600px]">
-            
+          <div className="flex-1 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-4 sm:p-6 md:p-8 w-full min-h-[500px] sm:min-h-[600px]">
             {/* ================= GENERAL TAB ================= */}
-            {activeTab === "General" && (
+            {activeTab === "general" && (
               <div className="space-y-8">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">General preferences</h3>
-                  <p className="text-sm text-slate-500 mt-1">Customize how the app looks and how you receive alerts.</p>
+                  <h3 className="text-xl font-bold text-[var(--text-main)]">
+                    {t('settings.general.title')}
+                  </h3>
+                  <p className="text-sm text-[var(--text-body)] opacity-90 mt-1">
+                    {t('settings.general.subtitle')}
+                  </p>
                 </div>
 
                 {/* Theme Selection */}
                 <div className="space-y-4">
-                  <label className="text-sm font-semibold text-slate-800">Theme</label>
-                  <div className="flex gap-4">
-                    {['Light', 'Dark', 'Forest', 'Cyber'].map((mode) => (
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    {t('settings.general.theme')}
+                  </label>
+                  <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-4">
+                    {["Light", "Dark", "Forest", "Cyber"].map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setTheme(mode)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl border font-medium transition-all ${
-                          theme === mode 
-                            ? "border-indigo-600 bg-indigo-50 text-indigo-700" 
-                            : "border-gray-200 hover:bg-gray-50 text-slate-600"
-                        }`}
+                        className={`flex items-center justify-center sm:justify-start gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border font-medium transition-all text-sm sm:text-base ${theme === mode
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                          : "border-[var(--border-color)] hover:bg-[var(--bg-secondary)] text-[var(--text-body)]"
+                          }`}
+
                       >
-                        {mode === 'Light' && <Sun size={18} />}
-                        {mode === 'Dark' && <Moon size={18} />}
-                        {mode === 'Forest' && <TreePine size={18} />}
-                        {mode === 'Cyber' && <Monitor size={18} />}
-                        {mode}
+                        {mode === "Light" && <Sun size={18} />}
+                        {mode === "Dark" && <Moon size={18} />}
+                        {mode === "Forest" && <TreePine size={18} />}
+                        {mode === "Cyber" && <Monitor size={18} />}
+                        <span className="hidden xs:inline">{mode}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <hr className="border-gray-100" />
+                <hr className="border-[var(--border-color)]" />
 
                 {/* Notification Permissions */}
                 <div className="space-y-6">
-                  <label className="text-sm font-semibold text-slate-800">Notification permissions</label>
-                  
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    {t('settings.general.notifications_title')}
+                  </label>
+
                   {/* Toggle Item */}
-                  <div className="flex items-center justify-between p-4 border border-gray-100 rounded-xl">
+                  <div className="flex items-center justify-between p-4 border border-[var(--border-color)] rounded-xl">
                     <div className="flex gap-4">
-                      <div className="p-2 bg-blue-50 text-blue-600 rounded-lg h-fit"><Bell size={20} /></div>
+                      <div className="p-2 bg-[var(--primary)]/10 text-[var(--primary)] rounded-lg h-fit">
+                        <Bell size={20} />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-800">Push notifications</h4>
-                        <p className="text-xs text-slate-500 mt-1">Allow browser notifications for critical events.</p>
+                        <h4 className="text-sm font-semibold text-[var(--text-main)]">
+                          {t('settings.general.push')}
+                        </h4>
+                        <p className="text-xs text-[var(--text-body)] opacity-90 mt-1">
+                          {t('settings.general.push_desc')}
+                        </p>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => setNotifications({...notifications, push: !notifications.push})}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${notifications.push ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                    <button
+                      onClick={() =>
+                        setNotifications({
+                          ...notifications,
+                          push: !notifications.push,
+                        })
+                      }
+                      className={`w-12 h-6 rounded-full transition-colors relative ${notifications.push ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${notifications.push ? 'left-7' : 'left-1'}`}></div>
+                      <div
+                        className={`w-4 h-4 bg-[var(--bg-card)] rounded-full absolute top-1 transition-transform ${notifications.push ? "left-7" : "left-1"}`}
+                      ></div>
                     </button>
                   </div>
 
                   {/* Toggle Item */}
-                  <div className="flex items-center justify-between p-4 border border-gray-100 rounded-xl">
+                  <div className="flex items-center justify-between p-4 border border-[var(--border-color)] rounded-xl">
                     <div className="flex gap-4">
-                      <div className="p-2 bg-amber-50 text-amber-600 rounded-lg h-fit"><Volume2 size={20} /></div>
+                      <div className="p-2 bg-[var(--warning)]/10 text-[var(--warning)] rounded-lg h-fit">
+                        <Volume2 size={20} />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-800">Sound effects</h4>
-                        <p className="text-xs text-slate-500 mt-1">Play a sound when a student is marked present.</p>
+                        <h4 className="text-sm font-semibold text-[var(--text-main)]">
+                          {t('settings.general.sound')}
+                        </h4>
+                        <p className="text-xs text-[var(--text-body)] opacity-90 mt-1">
+                          {t('settings.general.sound_desc')}
+                        </p>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => setNotifications({...notifications, sound: !notifications.sound})}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${notifications.sound ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                    <button
+                      onClick={() =>
+                        setNotifications({
+                          ...notifications,
+                          sound: !notifications.sound,
+                        })
+                      }
+                      className={`w-12 h-6 rounded-full transition-colors relative ${notifications.sound ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${notifications.sound ? 'left-7' : 'left-1'}`}></div>
+                      <div
+                        className={`w-4 h-4 bg-[var(--bg-card)] rounded-full absolute top-1 transition-transform ${notifications.sound ? "left-7" : "left-1"}`}
+                      ></div>
                     </button>
                   </div>
                 </div>
 
                 {/* Email Permissions */}
                 <div className="space-y-4">
-                  <label className="text-sm font-semibold text-slate-800">Email preferences</label>
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    {t('settings.general.email_title')}
+                  </label>
                   <div className="space-y-3">
-                    {['Daily attendance summary', 'Critical attendance alerts', 'Product updates'].map((item, idx) => (
-                      <label key={idx} className="flex items-center gap-3 cursor-pointer group">
-                        <div className="w-5 h-5 rounded border border-gray-300 flex items-center justify-center text-white group-hover:border-indigo-500 bg-white group-hover:shadow-sm transition-all has-[:checked]:bg-indigo-600 has-[:checked]:border-indigo-600">
-                          <input type="checkbox" defaultChecked={idx < 2} className="hidden" />
+                    {emailPreferencesList.map((item, idx) => (
+                      <label
+                        key={idx}
+                        className="flex items-center gap-3 cursor-pointer group"
+                      >
+                        <div className="w-5 h-5 rounded border border-[var(--border-color)] flex items-center justify-center text-[var(--text-on-primary)] group-hover:border-[var(--primary)] bg-[var(--bg-card)] group-hover:shadow-sm transition-all has-[:checked]:bg-[var(--primary)] has-[:checked]:border-[var(--primary)]">
+                          <input
+                            type="checkbox"
+                            checked={
+                              Array.isArray(_emailPreferences) &&
+                              _emailPreferences.find((p) => p.key === item.key)?.enabled === true
+                            }
+                            onChange={() => toggleEmailPref(item.key)}
+                            className="hidden"
+                          />
                           <Check size={14} />
                         </div>
-                        <span className="text-sm text-slate-600 group-hover:text-slate-900">{item}</span>
+                        <span className="text-sm text-[var(--text-body)] group-hover:text-[var(--text-main)]">
+                          {t(item.key)}
+                        </span>
                       </label>
                     ))}
                   </div>
                 </div>
 
+                {/* Manual Low Attendance Notice */}
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    Manual Actions
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleSendLowAttendanceNotice}
+                      disabled={sendingNotice}
+                      className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-[var(--danger,#ef4444)] text-white hover:opacity-90 shadow-md disabled:opacity-50"
+                    >
+                      {sendingNotice ? "Sending…" : "Send Low Attendance Notice"}
+                    </button>
+                    {noticeResult && (
+                      <span className={`text-sm ${noticeResult.success ? "text-green-600" : "text-[var(--danger,#ef4444)]"}`}>
+                        {noticeResult.message}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-body)] opacity-90">
+                    Manually send low attendance warning emails to students with less than 75% attendance in your subjects.
+                  </p>
+                </div>
+
                 {/* Footer Buttons */}
-                <div className="pt-6 flex justify-end gap-3 border-t border-gray-100">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-200">Cancel</button>
-                  <button className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[#4F46E5] text-white hover:bg-[#4338ca] shadow-md">Save changes</button>
+                <div className="pt-6 flex flex-col-reverse sm:flex-row justify-end gap-3 border-t border-[var(--border-color)]">
+                  <button className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]">
+                    {t('settings.general.cancel')}
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={saving}
+                    className="w-full sm:w-auto px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md disabled:opacity-50"
+                  >
+                    {saving ? t('settings.general.saving') : t('settings.general.save')}
+                  </button>
                 </div>
               </div>
             )}
 
             {/* ================= THRESHOLDS TAB ================= */}
-            {activeTab === "Thresholds" && (
+            {activeTab === "thresholds" && (
               <div className="space-y-8">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">Attendance thresholds</h3>
-                  <p className="text-sm text-slate-500 mt-1">
-                    Define when a student is considered at risk or critical based on attendance percentage.
+                  <h3 className="text-xl font-bold text-[var(--text-main)]">
+                    {t('settings.thresholds.title')}
+                  </h3>
+                  <p className="text-sm text-[var(--text-body)] opacity-90 mt-1">
+                    {t('settings.thresholds.subtitle')}
                   </p>
                 </div>
 
-                <div className="p-8 border border-gray-100 rounded-xl bg-white space-y-8 shadow-sm">
-                  <div className="flex justify-between items-end border-b border-gray-100 pb-4">
-                     <label className="text-base font-semibold text-slate-800">Warning and critical ranges</label>
-                     <div className="text-xs font-medium text-gray-400">
-                       Warning: <span className="text-amber-600">{warningVal}% – {safeVal}%</span> · Critical: <span className="text-rose-600">&lt; {warningVal}%</span>
-                     </div>
+                <div className="p-4 sm:p-8 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] space-y-6 sm:space-y-8 shadow-sm">
+                  <div className="flex justify-between items-end border-b border-[var(--border-color)] pb-4">
+                    <label className="text-base font-semibold text-[var(--text-main)]">
+                      {t('settings.thresholds.ranges')}
+                    </label>
+                    <div className="text-xs font-medium text-[var(--text-body)] opacity-70">
+                      {t('settings.thresholds.warning')}:{" "}
+                      <span className="text-[var(--warning)]">
+                        {warningVal}% – {safeVal}%
+                      </span>{" "}
+                      · {t('settings.thresholds.critical')}:{" "}
+                      <span className="text-[var(--danger)]">&lt; {warningVal}%</span>
+                    </div>
                   </div>
 
-                  <div className="relative py-8 select-none px-2">
-                    <div className="h-4 w-full rounded-full bg-gray-100 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 h-full bg-rose-400" style={{ width: `${warningVal}%` }}></div>
-                      <div className="absolute top-0 h-full bg-amber-400" style={{ left: `${warningVal}%`, width: `${safeVal - warningVal}%` }}></div>
-                      <div className="absolute top-0 h-full bg-emerald-400" style={{ left: `${safeVal}%`, right: 0 }}></div>
+                  <div
+                    className="relative py-8 select-none px-2"
+                    ref={sliderRef}
+                  >
+                    <div className="h-4 w-full rounded-full bg-[var(--bg-secondary)] relative overflow-hidden">
+                      <div
+                        className="absolute top-0 left-0 h-full bg-[var(--danger)]"
+                        style={{ width: `${warningVal}%` }}
+                      ></div>
+                      <div
+                        className="absolute top-0 h-full bg-[var(--warning)]"
+                        style={{
+                          left: `${warningVal}%`,
+                          width: `${safeVal - warningVal}%`,
+                        }}
+                      ></div>
+                      <div
+                        className="absolute top-0 h-full bg-[var(--success)]"
+                        style={{ left: `${safeVal}%`, right: 0 }}
+                      ></div>
                     </div>
-                    <div className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-[3px] border-indigo-600 rounded-full shadow-md cursor-ew-resize z-20" style={{ left: `calc(${warningVal}% - 12px)` }}></div>
-                    <div className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-white border-[3px] border-indigo-600 rounded-full shadow-md cursor-ew-resize z-20" style={{ left: `calc(${safeVal}% - 12px)` }}></div>
-                    
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--bg-card)] border-[3px] border-[var(--primary)] rounded-full shadow-md cursor-ew-resize z-20 hover:scale-110 transition-transform"
+                      style={{ left: `calc(${warningVal}% - 12px)` }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDragging('warning');
+                      }}
+                    ></div>
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-[var(--bg-card)] border-[3px] border-[var(--primary)] rounded-full shadow-md cursor-ew-resize z-20 hover:scale-110 transition-transform"
+                      style={{ left: `calc(${safeVal}% - 12px)` }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDragging('safe');
+                      }}
+                    ></div>
+
                     <div className="absolute top-14 w-full flex text-[11px] font-bold pointer-events-none mt-2">
-                       <div className="flex items-center gap-1.5 absolute" style={{left: '2%'}}><span className="w-2 h-2 rounded-full bg-rose-500"></span><span className="text-slate-600">Critical zone</span></div>
-                       <div className="flex items-center gap-1.5 absolute" style={{left: '52%'}}><span className="w-2 h-2 rounded-full bg-amber-500"></span><span className="text-slate-600">Warning zone</span></div>
-                       <div className="flex items-center gap-1.5 absolute" style={{left: '87%'}}><span className="w-2 h-2 rounded-full bg-emerald-500"></span><span className="text-slate-600">Safe zone</span></div>
+                      <div
+                        className="flex items-center gap-1.5 absolute"
+                        style={{ left: "2%" }}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[var(--danger)]"></span>
+                        <span className="text-[var(--text-body)]">{t('settings.thresholds.zone_critical')}</span>
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 absolute"
+                        style={{ left: "52%" }}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[var(--warning)]"></span>
+                        <span className="text-[var(--text-body)]">{t('settings.thresholds.zone_warning')}</span>
+                      </div>
+                      <div
+                        className="flex items-center gap-1.5 absolute"
+                        style={{ left: "87%" }}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[var(--success)]"></span>
+                        <span className="text-[var(--text-body)]">{t('settings.thresholds.zone_safe')}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-blue-600 rounded-xl p-5 flex items-start gap-4 shadow-sm text-white">
-                     <Info className="flex-shrink-0 mt-0.5 opacity-90" size={20} />
-                     <p className="text-sm leading-relaxed text-blue-50 font-medium">
-                       Adjusting these values will update visual alerts across dashboards, student profiles and reports.
-                     </p>
+                  <div className="bg-[var(--action-info-bg)] rounded-xl p-5 flex items-start gap-4 shadow-sm text-[var(--text-on-primary)]">
+                    <Info
+                      className="flex-shrink-0 mt-0.5 opacity-90"
+                      size={20}
+                    />
+                    <p className="text-sm leading-relaxed text-[var(--text-main)]/90 font-medium">
+                      {t('settings.thresholds.info')}
+                    </p>
                   </div>
 
-                  <div className="pt-8 flex justify-end gap-3 border-t border-gray-100">
-                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-200 cursor-pointer">Cancel</button>
-                    <button className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[#4F46E5] text-white hover:bg-[#4338ca] shadow-md cursor-pointer">Save changes</button>
+                  <div className="pt-8 flex justify-end gap-3 border-t border-[var(--border-color)]">
+                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
+                      {t('settings.general.cancel')}
+                    </button>
+                    <button
+                      onClick={saveProfile}
+                      disabled={saving}
+                      className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"
+                    >
+                      {saving ? t('settings.general.saving') : t('settings.general.save')}
+                    </button>
                   </div>
                 </div>
               </div>
             )}
 
             {/* ================= PROFILE TAB ================= */}
-            {activeTab === "Profile" && (
+            {activeTab === "profile" && (
               <div className="space-y-8">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800">Profile details</h3>
-                    <p className="text-sm text-slate-500 mt-1">Keep your basic information and contact details up to date.</p>
+                    <h3 className="text-xl font-bold text-[var(--text-main)]">
+                      {t('settings.profile.title')}
+                    </h3>
+                    <p className="text-sm text-[var(--text-body)] opacity-90 mt-1">
+                      {t('settings.profile.subtitle')}
+                    </p>
                   </div>
-                  <button className="text-indigo-600 text-sm font-medium hover:underline cursor-pointer">View public profile</button>
+                  <button className="text-[var(--primary)] text-sm font-medium hover:underline cursor-pointer">
+                    {t('settings.profile.view_public')}
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-6 p-6 bg-slate-50 rounded-xl border border-gray-100">
-                  <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center text-2xl font-bold text-slate-500 border-4 border-white shadow-sm overflow-hidden">
-                    {profile.avatarUrl
-                      ? <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                      : <span>{getInitials(profile.name)}</span>
-                    }
+                <div className="flex items-center gap-4 sm:gap-6 p-4 sm:p-6 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] flex-col sm:flex-row text-center sm:text-left">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden flex-shrink-0">
+                    {profile.avatarUrl ? (
+                      <img
+                        src={profile.avatarUrl}
+                        alt="avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span>{getInitials(profile.name)}</span>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-slate-800">{profile.name || "-"}</h4>
-                    <p className="text-sm text-slate-500">{profile.role || "Department of Science"}</p>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-lg font-bold text-[var(--text-main)] truncate">
+                      {profile.name || "-"}
+                    </h4>
+                    <p className="text-sm text-[var(--text-body)] opacity-90 truncate">
+                      {profile.branch?.toUpperCase() || "Department of Science"}
+                    </p>{" "}
                   </div>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-gray-50 transition shadow-sm cursor-pointer">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] transition shadow-sm cursor-pointer w-full sm:w-auto justify-center">
                     <Upload size={16} />
-                    <span>Change photo</span>
-                    <input type="file" accept="image/*" onChange={onAvatarSelected} className="hidden" />
+                    <span>{t('settings.profile.change_photo')}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={onAvatarSelected}
+                      className="hidden"
+                    />
                   </label>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Full Name</label>
-                    <input 
-                      type="text" 
+                    <label className="text-sm font-semibold text-[var(--text-main)]">
+                      {t('settings.profile.full_name')}
+                    </label>
+                    <input
+                      type="text"
                       value={profile.name}
-                      onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))} 
-                      className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" 
+                      onChange={(e) =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--primary)] outline-none text-[var(--text-main)]"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Role</label>
-                    <input type="text" value={profile.role} onChange={(e) => setProfile(prev => ({ ...prev, role: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" />
+                    <label className="text-sm font-semibold text-[var(--text-main)]">
+                      {t('settings.profile.role')}
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        profile.role.charAt(0).toUpperCase() +
+                        profile.role.slice(1)
+                      }
+                      onChange={(e) =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          role: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--primary)] outline-none text-[var(--text-main)]"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Email Address</label>
-                    <input type="email" value={profile.email} disabled className="w-full px-4 py-2.5 rounded-lg border border-gray-200 bg-gray-100 text-slate-500 cursor-not-allowed" />
+                    <label className="text-sm font-semibold text-[var(--text-main)]">
+                      {t('settings.profile.email')}
+                    </label>
+                    <input
+                      type="email"
+                      value={profile.email}
+                      disabled
+                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-secondary)] text-[var(--text-body)] opacity-90 cursor-not-allowed"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-700">Phone Number</label>
-                    <input type="tel" value={profile.phone} onChange={(e) => setProfile(prev => ({ ...prev, phone: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700" />
+                    <label className="text-sm font-semibold text-[var(--text-main)]">
+                      {t('settings.profile.phone')}
+                    </label>
+                    <input
+                      type="tel"
+                      value={profile.phone}
+                      onChange={(e) =>
+                        setProfile((prev) => ({
+                          ...prev,
+                          phone: e.target.value,
+                        }))
+                      }
+                      className="w-full px-4 py-2.5 rounded-lg border border-[var(--border-color)] focus:ring-2 focus:ring-[var(--primary)] outline-none text-[var(--text-main)]"
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                   <label className="text-sm font-semibold text-slate-700">Subjects Taught</label>
-                   <div className="flex flex-wrap gap-2">
-                      {profile.subjects && profile.subjects.length > 0 ? (
-                        profile.subjects.map((sub, idx) => (
-                          <div key={sub._id} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-sm font-medium flex items-center gap-2">
-                            <span>{sub.name} ({sub.code})</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-sm text-slate-500">No subjects added</div>
-                      )}
-                      <button onClick={() => setShowSubjectModal(true)} className="px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 rounded-full text-sm font-medium hover:border-indigo-400 hover:text-indigo-600 flex items-center gap-1 transition cursor-pointer">
-                        <Plus size={14} /> Add subject
-                      </button>
-                      <AddSubjectModal 
-                        open={showSubjectModal}
-                        onClose={()=> setShowSubjectModal(false)}
-                        onSave={handleAddSubject}
-                      />
-                   </div>
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    {t('settings.profile.subjects')}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.subjects && profile.subjects.length > 0 ? (
+                      profile.subjects.map((sub) => (
+                        <div
+                          key={sub._id}
+                          className="px-3 py-1.5 bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/20 rounded-full text-sm font-medium flex items-center gap-2"
+                        >
+                          <span>
+                            {sub.name} ({sub.code})
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-[var(--text-body)] opacity-90">
+                        {t('settings.profile.no_subjects')}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setShowSubjectModal(true)}
+                      className="px-3 py-1.5 border border-dashed border-[var(--border-color)] text-[var(--text-body)] opacity-90 rounded-full text-sm font-medium hover:border-[var(--primary)] hover:text-[var(--primary)] flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Plus size={14} /> {t('settings.profile.add_subject')}
+                    </button>
+                    <AddSubjectModal
+                      open={showSubjectModal}
+                      onClose={() => setShowSubjectModal(false)}
+                      onSave={handleAddSubject}
+                    />
+                  </div>
                 </div>
-                {saveError && <div className="text-sm text-rose-600">{saveError}</div>}
+                {saveError && (
+                  <div className="text-sm text-[var(--danger)]">{saveError}</div>
+                )}
 
-                <div className="pt-6 flex justify-end gap-3 border-t border-gray-100">
+                <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
                   <button
                     type="button"
                     onClick={() => {
-                      // reset to last loaded server profile if you saved it in state 'loadedProfile' or reload from server
-                      // For now we simply reload by calling getSettings again:
                       (async () => {
                         try {
                           const fresh = await getSettings();
-                          setProfile({
-                            name: fresh.profile?.name ?? "",
-                            email: fresh.profile?.email ?? "",
-                            phone: fresh.profile?.phone ?? "",
-                            role: fresh.profile?.role ?? "",
-                            subjects: fresh.profile?.subjects ?? [],
-                            avatarUrl: fresh.profile?.avatarUrl ?? null,
-                          });
+                          await loadProfile(fresh);
                         } catch (e) {
                           console.error("Reload failed", e);
                         }
                       })();
                     }}
-                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-200 cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer"
                   >
-                    Cancel
+                    {t('settings.general.cancel')}
                   </button>
 
                   <button
                     type="button"
                     onClick={saveProfile}
                     disabled={saving}
-                    className={`px-8 py-2.5 rounded-xl text-sm font-semibold text-white ${saving ? 'bg-gray-400' : 'bg-[#4F46E5] hover:bg-[#4338ca]'} shadow-md cursor-pointer`}
+                    className={`px-8 py-2.5 rounded-xl text-sm font-semibold text-[var(--text-on-primary)] ${saving ? "bg-[var(--border-color)]" : "bg-[var(--primary)] hover:bg-[var(--primary-hover)]"} shadow-md cursor-pointer`}
                   >
-                    {saving ? "Saving..." : "Save changes"}
+                    {saving ? t('settings.general.saving') : t('settings.general.save')}
                   </button>
                 </div>
               </div>
             )}
 
             {/* ================= FACE SETTINGS TAB ================= */}
-            {activeTab === "Face settings" && (
+            {activeTab === "face_settings" && (
               <div className="space-y-8">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800">Face recognition configuration</h3>
-                  <p className="text-sm text-slate-500 mt-1">Manage enrolment data and tune the recognition engine parameters.</p>
+                  <h3 className="text-xl font-bold text-[var(--text-main)]">
+                    {t('settings.face_settings.title')}
+                  </h3>
+                  <p className="text-sm text-[var(--text-body)] opacity-90 mt-1">
+                    {t('settings.face_settings.subtitle')}
+                  </p>
                 </div>
 
-                {/* 1. Enrolment Status */}
-                <div className="p-6 border border-gray-100 rounded-xl bg-gradient-to-r from-slate-50 to-white flex items-center justify-between">
-                   <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-                        <Camera size={28} />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800">Face data enrolled</h4>
-                        <p className="text-sm text-slate-500">Last updated: 3 days ago via Mobile App</p>
-                      </div>
-                   </div>
-                   <button className="px-4 py-2 bg-white border border-gray-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm flex items-center gap-2 cursor-pointer">
-                     <RefreshCw size={16} /> Re-calibrate
-                   </button>
-                </div>
-
-                {/* 2. Recognition Sensitivity Slider */}
+                {/* Recognition Sensitivity Slider */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                     <label className="text-sm font-semibold text-slate-800">Recognition confidence threshold</label>
-                     <span className="text-sm font-bold text-indigo-600">{sensitivity}%</span>
+                    <label className="text-sm font-semibold text-[var(--text-main)]">
+                      {t('settings.face_settings.threshold')}
+                    </label>
+                    <span className="text-sm font-bold text-[var(--primary)]">
+                      {sensitivity}%
+                    </span>
                   </div>
-                  <input 
-                    type="range" 
-                    min="50" 
-                    max="99" 
-                    value={sensitivity} 
-                    onChange={(e) => setSensitivity(e.target.value)}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                  <input
+                    type="range"
+                    min="50"
+                    max="99"
+                    value={sensitivity}
+                    onChange={(e) => handleSensitivityChange(e.target.value)}
+                    className="w-full h-2 bg-[var(--bg-secondary)] rounded-lg appearance-none cursor-pointer accent-[var(--primary)]"
                   />
-                  <p className="text-xs text-slate-500">
-                    Higher values reduce false positives but might require better lighting conditions. Recommended: 80%.
+                  <p className="text-xs text-[var(--text-body)] opacity-90">
+                    {t('settings.face_settings.threshold_desc')}
                   </p>
                 </div>
 
                 {/* 3. Security Toggles */}
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-slate-800">Security measures</h4>
-                  
-                  <div className="flex items-center justify-between p-4 border border-gray-100 rounded-xl">
+                  <h4 className="text-sm font-semibold text-[var(--text-main)]">
+                    {t('settings.face_settings.security')}
+                  </h4>
+
+                  <div className="flex items-center justify-between p-4 border border-[var(--border-color)] rounded-xl">
                     <div className="flex gap-4">
-                      <div className="p-2 bg-purple-50 text-purple-600 rounded-lg h-fit"><Shield size={20} /></div>
+                      <div className="p-2 bg-[var(--primary)]/10 text-[var(--primary)] rounded-lg h-fit">
+                        <Shield size={20} />
+                      </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-slate-800">Liveness detection (Anti-spoofing)</h4>
-                        <p className="text-xs text-slate-500 mt-1">Requires subjects to blink or move slightly to prevent photo attacks.</p>
+                        <h4 className="text-sm font-semibold text-[var(--text-main)]">
+                          {t('settings.face_settings.liveness')}
+                        </h4>
+                        <p className="text-xs text-[var(--text-body)] opacity-90 mt-1">
+                          {t('settings.face_settings.liveness_desc')}
+                        </p>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setLiveness(!liveness)}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${liveness ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${liveness ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
-                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${liveness ? 'left-7' : 'left-1'}`}></div>
+                      <div
+                        className={`w-4 h-4 bg-[var(--bg-card)] rounded-full absolute top-1 transition-transform ${liveness ? "left-7" : "left-1"}`}
+                      ></div>
                     </button>
                   </div>
                 </div>
 
-                {/* 4. Danger Zone */}
-                <div className="pt-6 border-t border-gray-100">
-                  <h4 className="text-sm font-bold text-rose-600 mb-4">Danger Zone</h4>
-                  <div className="flex items-center justify-between p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                    <div>
-                      <h5 className="text-sm font-semibold text-rose-900">Reset recognition model</h5>
-                      <p className="text-xs text-rose-600 mt-1">This will clear all learned face patterns for this profile.</p>
-                    </div>
-                    <button className="px-4 py-2 bg-white border border-rose-200 text-rose-600 rounded-lg text-sm font-medium hover:bg-rose-100 transition shadow-sm flex items-center gap-2 cursor-pointer">
-                      <Trash2 size={16} /> Reset data
-                    </button>
-                  </div>
+                {/* Footer Buttons */}
+                <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
+                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
+                    {t('settings.face_settings.discard')}
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={saving}
+                    className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    {saving ? t('settings.general.saving') : t('settings.face_settings.apply')}
+                  </button>
                 </div>
-
-                 {/* Footer Buttons */}
-                 <div className="pt-6 flex justify-end gap-3 border-t border-gray-100">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 border border-gray-200 cursor-pointer">Discard</button>
-                  <button className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[#4F46E5] text-white hover:bg-[#4338ca] shadow-md cursor-pointer">Apply settings</button>
-                </div>
-
               </div>
             )}
 
             {/* ================= CREDITS TAB (NEW) ================= */}
-            {activeTab === "Credits" && (
+            {activeTab === "credits" && (
               <div className="space-y-8 animate-in fade-in duration-300">
                 <div className="flex justify-between items-start">
                   <div>
                     <div className="flex items-center gap-3">
-                       <h3 className="text-xl font-bold text-slate-800">Shoutout to our developers</h3>
-                       <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold">Built with care</span>
+                      <h3 className="text-xl font-bold text-[var(--text-main)]">
+                        {t('settings.credits.title')}
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] text-xs font-bold">
+                        {t('settings.credits.badge')}
+                      </span>
                     </div>
-                    <p className="text-sm text-slate-500 mt-1">
-                      A small thank you page to celebrate the team behind the Smart Face Recognition Attendance System.
+                    <p className="text-sm text-[var(--text-body)] opacity-90 mt-1">
+                      {t('settings.credits.subtitle')}
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <button className="px-4 py-2 bg-white border border-gray-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center gap-2 shadow-sm transition cursor-pointer">
-                      <Share2 size={16} /> Share appreciation
-                    </button>
-                    <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 flex items-center gap-2 shadow-sm transition cursor-pointer">
-                      <Sparkles size={16} /> Send thanks
+                    <button className="px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] flex items-center gap-2 shadow-sm transition cursor-pointer">
+                      <Sparkles size={16} /> {t('settings.credits.send_thanks')}
                     </button>
                   </div>
                 </div>
 
-                {/* Highlight Card */}
-                <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex flex-col md:flex-row items-start md:items-center gap-6 shadow-sm">
-                   <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white flex-shrink-0 shadow-md">
-                      <Sparkles size={32} />
-                   </div>
-                   <div className="flex-1">
-                      <h4 className="text-lg font-bold text-slate-800 mb-1">To the developers who made smart attendance possible</h4>
-                      <p className="text-sm text-slate-600 leading-relaxed mb-3">
-                        From camera calibration to face-matching accuracy, every detail in this system exists because of your patience, late nights, and clean commits.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                         <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">Reliable sessions</span>
-                         <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">Secure data</span>
-                         <span className="px-3 py-1 bg-white text-blue-700 rounded-full text-xs font-semibold shadow-sm">Smoother classes</span>
+                {loadingContributors ? (
+                  <div className="flex justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {contributors.map((contributor) => (
+                      <div
+                        key={contributor.id}
+                        className="p-5 border border-[var(--border-color)] rounded-xl hover:shadow-lg transition-all bg-[var(--bg-card)] group flex items-center gap-4"
+                      >
+                        <img
+                          src={contributor.avatar_url}
+                          alt={contributor.login}
+                          className="w-14 h-14 rounded-full border-2 border-[var(--border-color)] group-hover:border-[var(--primary)]/20 transition-colors"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-[var(--text-main)] truncate">
+                            {contributor.login}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-medium px-2 py-0.5 bg-[var(--primary)]/10 text-[var(--primary)] rounded-full">
+                              {contributor.contributions} {t('settings.credits.commits')}
+                            </span>
+                          </div>
+                        </div>
+                        <a
+                          href={contributor.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-[var(--text-body)] opacity-70 hover:text-[var(--primary)] hover:bg-[var(--primary)]/10 rounded-lg transition-colors"
+                        >
+                          <Share2 size={18} />
+                        </a>
                       </div>
-                   </div>
+                    ))}
+                  </div>
+                )}
+
+                {contributors.length === 0 && !loadingContributors && (
+                  <div className="text-center text-[var(--text-body)] opacity-90 py-10">
+                    {t('settings.credits.no_contributors')}
+                  </div>
+                )}
+
+                <div className="text-center text-xs text-[var(--text-body)] opacity-70 mt-12 pt-8 border-t border-[var(--border-color)]">
+                  {t('settings.credits.footer')}
                 </div>
-
-                {/* Team Grid */}
-                <div>
-                   <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1">Core development team</h4>
-                   <p className="text-sm text-slate-500 mb-4">The humans behind the code, models, and UI that keep attendance running smoothly.</p>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      
-                      {/* Card 1 */}
-                      <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">PV</div>
-                            <div>
-                               <div className="font-bold text-slate-800">Priya Verma</div>
-                               <div className="text-xs text-indigo-600 font-medium">Backend & APIs</div>
-                            </div>
-                         </div>
-                         <div className="flex gap-2 mb-3">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1"><Code size={10}/> Session engine</span>
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">Scalability</span>
-                         </div>
-                         <p className="text-xs text-slate-500 italic border-l-2 border-indigo-100 pl-2">
-                           "If attendance is instant and reliable, the backend is quietly doing its job."
-                         </p>
-                      </div>
-
-                      {/* Card 2 */}
-                      <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">AM</div>
-                            <div>
-                               <div className="font-bold text-slate-800">Arjun Mehta</div>
-                               <div className="text-xs text-emerald-600 font-medium">Face recognition</div>
-                            </div>
-                         </div>
-                         <div className="flex gap-2 mb-3">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1"><Aperture size={10}/> ML models</span>
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">Camera tuning</span>
-                         </div>
-                         <p className="text-xs text-slate-500 italic border-l-2 border-emerald-100 pl-2">
-                           "Your best attendance photo is the one our models never fail to recognise."
-                         </p>
-                      </div>
-
-                      {/* Card 3 */}
-                      <div className="p-5 border border-gray-100 rounded-xl hover:shadow-md transition-all bg-white group">
-                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">SK</div>
-                            <div>
-                               <div className="font-bold text-slate-800">Sara Khan</div>
-                               <div className="text-xs text-rose-500 font-medium">UI & UX</div>
-                            </div>
-                         </div>
-                         <div className="flex gap-2 mb-3">
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium flex items-center gap-1"><Palette size={10}/> Teacher portal</span>
-                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">Student app</span>
-                         </div>
-                         <p className="text-xs text-slate-500 italic border-l-2 border-rose-100 pl-2">
-                           "Simple layouts, clear states, and fewer taps for already-busy teachers."
-                         </p>
-                      </div>
-
-                   </div>
-                </div>
-
-                <div className="text-center text-xs text-gray-400 mt-8 pt-8 border-t border-gray-50">
-                   Thank you to every developer, designer, and tester who helped turn the Smart Face Recognition Attendance System from an idea into something teachers and students can use every day.
-                </div>
-
               </div>
             )}
-
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Dialog */}
+      <LogoutConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+      />
+
+      {showSubjectModal && (
+        <AddSubjectModal
+          onClose={() => setShowSubjectModal(false)}
+          onSave={handleAddSubject}
+        />
+      )}
     </div>
   );
 }

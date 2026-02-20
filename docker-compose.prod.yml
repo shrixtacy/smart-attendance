@@ -1,0 +1,11 @@
+
+services:
+  backend-api:
+    restart: always
+    deploy:
+      replicas: 1 # Set to 1 because we use host port binding 8000:8000
+    command: gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker
+
+  mongodb:
+    volumes:
+      - /data/mongodb:/data/db

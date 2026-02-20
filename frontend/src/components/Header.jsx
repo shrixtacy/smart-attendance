@@ -1,52 +1,186 @@
 import React, { useEffect, useState } from "react";
-import { Bell, User, ChevronDown } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { User, ChevronDown, Menu, X, Sun, Moon } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useTheme } from "../theme/ThemeContext";
+import NotificationDropdown from "./NotificationDropdown";
+
+/** Navigation link definitions for the main header. */
+const navLinks = [
+  { to: "/dashboard", label: "overview" },
+  { to: "/attendance", label: "attendance" },
+  { to: "/students", label: "students" },
+  { to: "/analytics", label: "analytics" },
+  { to: "/reports", label: "reports" },
+  { to: "/manage-schedule", label: "schedule" },
+  { to: "/messaging", label: "messaging" },
+];
 
 export default function Header() {
-    const [user, setUser] = useState(null)
+  const { t, i18n } = useTranslation();
+  const { theme, toggle } = useTheme();
+  const isDark = theme === "Dark";
 
-    useEffect(()=>{
-        try{
-            const storedData = localStorage.getItem("user");
-            if(!storedData){
-                setUser(null);
-                return;
-            }
-            const parsed = JSON.parse(storedData);
-            setUser(parsed);
-        } catch(e){
-            console.error("Failed to parse user from local storage", e);
-            setUser(null);
+  const [user] = useState(() => {
+    const storedData = localStorage.getItem("user");
+    if (storedData) {
+        try {
+            return JSON.parse(storedData);
+        } catch {
+            return null;
         }
-    }, []);
+    }
+    return null;
+  });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
 
-    const displayName = user?.name || user?.email || "Guest";
+  // Close menu on route change
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  const displayName = user?.name || user?.email || "Guest";
+  const isActive = (path) => location.pathname === path;
 
   return (
-    <>
-    <div className="w-full h-16 flex items-center justify-start px-6 bg-[var(--bg-card)] gap-2" role="navigation">
-        <div className="logo-section flex items-center gap-4">
-            <img className="w-14 h-14 rounded-full" src="logo.png" alt="" />
-            <h1 className="text-2xl font-semibold text-[var(--text-main)]">Smart Attendance</h1>
+    <header className="sticky top-0 z-50 w-full bg-[var(--bg-card)] shadow-sm">
+      <div className="flex items-center justify-between h-16 px-4 md:px-6">
+        {/* Left */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="lg:hidden p-2 rounded-lg text-[var(--text-body)] hover:bg-[var(--bg-secondary)]"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+
+          <Link to="/dashboard" className="flex items-center gap-3">
+            <img className="w-10 h-10 rounded-full" src="/logo.png" alt="Logo" />
+            <h1 className="text-xl font-bold text-[var(--text-main)] hidden sm:block">
+              Smart Attendance
+            </h1>
+          </Link>
         </div>
-        <div className="nav-links text-gray-500 gap-1 ml-10">
-            <a href="/" className="mx-2 font-semibold hover:text-[var(--primary)] hover:bg-[var(--primary-hover)] py-2 px-3 rounded-4xl">Dashboard</a>
-            <a href="/attendance" className="mx-2 font-semibold hover:text-[var(--primary)] hover:bg-[var(--primary-hover)] py-2 px-3 rounded-4xl">Attendance</a>
-            <a href="/students" className="mx-2 font-semibold hover:text-[var(--primary)] hover:bg-[var(--primary-hover)] py-2 px-3 rounded-4xl">Student</a>
-            <a href="/analytics" className="mx-2 font-semibold hover:text-[var(--primary)] hover:bg-[var(--primary-hover)] py-2 px-3 rounded-4xl">Analytics</a>
-            <a href="/reports" className="mx-2 font-semibold hover:text-[var(--primary)] hover:bg-[var(--primary-hover)] py-2 px-3 rounded-4xl">Reports</a>
+
+        {/* Center */}
+        <nav className="hidden lg:flex items-center gap-1">
+          {navLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold ${
+                isActive(link.to)
+                  ? "text-[var(--primary)] bg-[var(--action-info-bg)]/10"
+                  : "text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
+              }`}
+            >
+              {t(`nav.${link.label}`)}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Right */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Language - Hidden on very small screens */}
+          <div className="hidden xs:flex items-center gap-1 sm:gap-2 mr-1 sm:mr-2" role="group" aria-label="Language selection">
+            <button
+              onClick={() => i18n.changeLanguage("en")}
+              className={`text-xs sm:text-sm ${i18n.language === "en" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+              aria-label="Switch to English"
+              aria-pressed={i18n.language === "en"}
+            >
+              EN
+            </button>
+            <span className="text-[var(--border-color)]" aria-hidden="true">/</span>
+            <button
+              onClick={() => i18n.changeLanguage("hi")}
+              className={`text-xs sm:text-sm ${i18n.language === "hi" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+              aria-label="Switch to Hindi"
+              aria-pressed={i18n.language === "hi"}
+            >
+              हि
+            </button>
+          </div>
+
+          {/* Notification Dropdown */}
+          <NotificationDropdown />
+
+          {/* Theme Toggle */}
+          <button
+            onClick={() => toggle(isDark ? "Light" : "Dark")}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--bg-secondary)]"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDark ? <Sun size={16} className="text-slate-400 sm:w-[18px] sm:h-[18px]" /> : <Moon size={16} className="text-slate-400 sm:w-[18px] sm:h-[18px]" />}
+          </button>
+
+          {/* Profile */}
+          <Link
+            to="/settings"
+            className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)]"
+          >
+            <User size={20} className="text-[var(--text-body)]" />
+            <span className="text-sm font-medium text-[var(--text-main)] max-w-[100px] truncate">{displayName}</span>
+            <ChevronDown size={16} className="text-[var(--text-body)]" />
+          </Link>
         </div>
-        <div className="profile-section flex items-center gap-5 text-gray-500 ml-auto justify-end">
-            <div className="bell bg-[var(--primary)] p-1 rounded-full">
-                <Bell className="text-[var(--text-on-primary)] cursor-pointer p-0.5"/>
-            </div>
-            
-            <User className="rounded-full" />
-            <div className="user flex items-center gap-1.5">
-                <span className="user-name text-[var(--text-main)]">{displayName || "John doe"}</span>
-                <a href="/settings"><ChevronDown className="cursor-pointer p-1" /></a>
-            </div>
-        </div>
-    </div>
-      
-    </>
-  );}
+      </div>
+
+      {/* Mobile nav */}
+      {menuOpen && (
+        <nav 
+          id="mobile-menu"
+          className="lg:hidden bg-[var(--bg-card)] px-4 pb-4 pt-2 space-y-1 border-t border-[var(--border-color)]"
+          role="navigation"
+          aria-label="Mobile navigation"
+        >
+          {navLinks.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={`block px-4 py-2.5 rounded-lg text-sm font-semibold ${
+                isActive(link.to)
+                  ? "text-[var(--primary)] bg-[var(--action-info-bg)]/10"
+                  : "text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
+              }`}
+            >
+              {t(`nav.${link.label}`)}
+            </Link>
+          ))}
+          
+          {/* Mobile language switcher */}
+          <div className="flex items-center gap-3 px-4 py-2.5 xs:hidden">
+            <span className="text-sm text-[var(--text-body)]">Language:</span>
+            <button
+              onClick={() => i18n.changeLanguage("en")}
+              className={`text-sm ${i18n.language === "en" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+            >
+              English
+            </button>
+            <span className="text-[var(--border-color)]">/</span>
+            <button
+              onClick={() => i18n.changeLanguage("hi")}
+              className={`text-sm ${i18n.language === "hi" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+            >
+              हिंदी
+            </button>
+          </div>
+          
+          {/* Mobile profile link */}
+          <Link
+            to="/settings"
+            className="sm:hidden flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
+          >
+            <User size={18} />
+            <span>{displayName}</span>
+          </Link>
+        </nav>
+      )}
+    </header>
+  );
+}

@@ -1,17 +1,37 @@
 # 🔥 Pull Request Summary
-Explain what this PR does.  
-What feature, fix, or improvement did you add?
+Provide a short, clear summary of what this PR does.
+
+- What problem does it solve?
+- What feature, fix, or improvement is introduced?
+- Keep it concise (2–3 sentences).
 
 ---
 
 # 🔗 Linked Issue
-Write the issue number this PR is linked with.  
-(Example: **Closes #12** — this automatically links & closes the issue when PR is merged)
+Link the issue this PR addresses.
+
+> Use keywords like **Closes / Fixes / Resolves** so GitHub auto-closes the issue.
+
+Closes #
+
+---
+
+# 📦 Type of Change
+_Select all that apply:_
+
+- [ ] 🐛 Bug fix (non-breaking fix)
+- [ ] ✨ New feature (non-breaking feature)
+- [ ] 💥 Breaking change
+- [ ] 🎨 UI/UX improvement
+- [ ] ♻️ Code refactor (no functional change)
+- [ ] ⚡ Performance improvement
+- [ ] 🧪 Tests added or updated
+- [ ] 📝 Documentation update
 
 ---
 
 # 🛠 Changes Made
-List the key changes included in this PR:
+Key changes included in this PR:
 
 - 
 - 
@@ -19,36 +39,47 @@ List the key changes included in this PR:
 
 ---
 
-# 🧪 Steps to Test
-Explain how reviewers can test this PR:
+# 🧪 How to Test
+Steps for reviewers to verify the changes:
 
 1. Go to **Dashboard**
-2. Click on **Start Session**
-3. Follow the flow where changes are applied
-4. Verify expected behaviour
+2. Navigate to the affected section
+3. Perform the relevant action
+4. Confirm the expected behaviour
 
 ---
 
 # 🎯 Expected Behaviour
-Describe what should happen after the changes.
+Describe what should work correctly after this PR is merged.
 
 ---
 
-# 📸 Screenshots / Proof (Optional)
-Add screenshots, videos, logs, or test results.
+# 📸 Screenshots / Proof
+_Required for UI changes_
+
+### Before
+N/A
+
+### After
+N/A
 
 ---
 
-# ✔ Checklist Before Submitting
+# ✔ Pre-Merge Checklist
+Please confirm the following:
 
-- [ ] Code compiles without errors  
-- [ ] No breaking changes  
-- [ ] Follows project conventions  
-- [ ] Added/updated comments or documentation  
-- [ ] Tested on local machine  
-- [ ] All checks passing  
+- [ ] Code follows project standards
+- [ ] Linting and formatting checks pass
+- [ ] Changes tested locally
+- [ ] No unintended breaking changes
+- [ ] Documentation updated (if needed)
+- [ ] Tests added/updated (if applicable)
+- [ ] Self-review completed
 
 ---
 
-# 📝 Additional Notes (Optional)
-Anything extra that the reviewer should know?
+# 📝 Additional Notes
+Anything reviewers should know:
+- migrations
+- config changes
+- known limitations

@@ -11,12 +11,31 @@ export const fetchCurrentUser = async () => {
     const res = await api.get("/auth/me");
     // console.log("id ", res.data)
     return res.data;
-  } catch (err) {
+  } catch {
     try {
       const profile = await fetchMyStudentProfile();
       return { ...profile.student, profileType: "student" };
-    } catch (e) {
+    } catch {
       return null;
     }
   }
+};
+
+export const forgotPassword = async (email) => {
+  const res = await api.post("/auth/forgot-password", { email });
+  return res.data;
+};
+
+export const resetPassword = async (email, otp, newPassword) => {
+  const res = await api.post("/auth/reset-password", {
+    email,
+    otp,
+    new_password: newPassword,
+  });
+  return res.data;
+};
+
+export const logout = async () => {
+  const res = await api.post("/auth/logout");
+  return res.data;
 };

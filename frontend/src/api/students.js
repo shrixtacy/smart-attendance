@@ -11,6 +11,16 @@ export const fetchMyStudentProfile = async () => {
   return res.data;
 }
 
+export const fetchMySubjects = async () => {
+  const res = await api.get("/students/me/subjects");
+  return res.data;
+};
+
+export const fetchStudentTodaySchedule = async () => {
+  const res = await api.get("/students/me/today-schedule");
+  return res.data;
+};
+
 export const uploadFaceImage = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
@@ -30,12 +40,18 @@ export const fetchAvailableSubjects = async () => {
 };
 
 export const addSubjectToStudent = async (subjectid) => {
-  const res = await api.post("/students/me/subjects", null, {
+  await api.post("/students/me/subjects", null, {
     params: {subject_id: subjectid}
   });
 };
 
 export async function removeSubjectFromStudent (subjectId) {
   const res = await api.delete(`/students/me/remove-subject/${subjectId}`);
+  return res.data;
+};
+
+// Get all students (for teachers - messaging feature)
+export const getStudents = async () => {
+  const res = await api.get("/settings/teachers/students");
   return res.data;
 };
