@@ -261,7 +261,7 @@ async def get_monthly_summary(
             class_oid = ObjectId(classId)
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid classId format")
-            
+
         # Verify explicit access if specific class requested (from 304)
         await _verify_teacher_class_access(teacher_oid, class_oid)
         match_filter["subjectId"] = class_oid

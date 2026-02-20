@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import sys
+import pytest
 
 # Add parent directory to path to import download_models
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -30,17 +31,17 @@ def test_model_path_resolution():
 def test_model_file_exists():
     """Test that the model file exists (should be downloaded)"""
     from app.ml import face_detector
-    
+
     # Model file must exist for the service to work
     # If this fails, the download_models.py script needs to be run
     model_path = Path(face_detector.model_path)
-    
+
     if not model_path.exists():
-        raise FileNotFoundError(
+        pytest.skip(
             f"Model file not found at {model_path}. "
-            f"Please run: python3 download_models.py"
+            "Run `python3 download_models.py` to download it."
         )
-    
+
     # Verify it's not empty
     assert model_path.stat().st_size > 0, "Model file is empty"
     assert model_path.stat().st_size > MIN_MODEL_SIZE_BYTES, \

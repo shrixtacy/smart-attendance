@@ -253,9 +253,7 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
     try:
         # Fetch notifications sorted by created_at (descending)
         notifications_cursor = (
-            db.notifications.find({"user_id": user_id})
-            .sort("created_at", -1)
-            .limit(50)
+            db.notifications.find({"user_id": user_id}).sort("created_at", -1).limit(50)
         )
 
         notifications = []

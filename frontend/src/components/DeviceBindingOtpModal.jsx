@@ -161,7 +161,7 @@ const DeviceBindingOtpModal = ({ isOpen, onClose, userEmail, onSuccess }) => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Alert severity="info">
               <Typography variant="body2">
-                We've sent a 6-digit OTP to your email. Please enter it below.
+                We&apos;ve sent a 6-digit OTP to your email. Please enter it below.
               </Typography>
             </Alert>
 

@@ -187,7 +187,7 @@ export default function Settings() {
       await apiLogout();
     } catch (error) {
       // Log error for debugging but continue with logout
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.error("Logout API call failed:", error);
       }
     } finally {

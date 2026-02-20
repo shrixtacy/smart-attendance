@@ -124,7 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(students_router)
     app.include_router(attendance_router)
     app.include_router(schedule_router)
-    app.include_router(holidays_router)                              # ← NEW
+    app.include_router(holidays_router)  # ← NEW
     app.include_router(settings_router.router)
     app.include_router(notifications_router)
     app.include_router(analytics_router)

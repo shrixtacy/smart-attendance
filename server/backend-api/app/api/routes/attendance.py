@@ -25,14 +25,14 @@ router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
 def _parse_object_id(value: str, field_name: str) -> ObjectId:
     """
     Parse a string value to ObjectId, raising HTTPException on failure.
-    
+
     Args:
         value: The string value to parse
         field_name: The field name for error messages
-        
+
     Returns:
         ObjectId: The parsed ObjectId
-        
+
     Raises:
         HTTPException: If the value is not a valid ObjectId
     """
@@ -49,20 +49,20 @@ def _parse_object_id_list(
 ) -> tuple[list[ObjectId], set[ObjectId]]:
     """
     Parse a list of string values to ObjectIds with deduplication.
-    
+
     Args:
         values: List of string values to parse
         field_name: The field name for error messages
-        
+
     Returns:
         tuple: (list of ObjectIds, set of ObjectIds for deduplication)
-        
+
     Raises:
         HTTPException: If any value is not a valid ObjectId
     """
     oid_list = []
     oid_set = set()
-    
+
     for val in values:
         try:
             oid = ObjectId(val)
@@ -72,7 +72,7 @@ def _parse_object_id_list(
             raise HTTPException(
                 status_code=400, detail=f"Invalid ObjectId in {field_name}: {val}"
             )
-    
+
     return oid_list, oid_set
 
 
@@ -82,13 +82,13 @@ async def mark_attendance_qr(
 ):
     """
     Mark attendance via QR code with geofencing check and date validation.
-    
+
     Validates:
     - subjectId exists
     - date is today (prevents scanning old screenshots)
     - token is valid
     - student location within allowed radius
-    
+
     Updates:
     - subjects.students.attendance array (adds attendance record)
     - subjects.students.present_count (increments counter)
@@ -98,19 +98,20 @@ async def mark_attendance_qr(
 
     student_oid = ObjectId(current_user["id"])
     subject_id = payload.subjectId
-    
+
     if not ObjectId.is_valid(subject_id):
         raise HTTPException(status_code=400, detail="Invalid subject ID")
-         
+
     subject_oid = ObjectId(subject_id)
 
     # Validate date is today
     from datetime import datetime, UTC
+
     try:
-        qr_date = datetime.fromisoformat(payload.date.replace('Z', '+00:00'))
+        qr_date = datetime.fromisoformat(payload.date.replace("Z", "+00:00"))
         today = datetime.now(UTC).date()
         qr_day = qr_date.date()
-        
+
         if qr_day != today:
             raise HTTPException(
                 status_code=400,
@@ -130,17 +131,17 @@ async def mark_attendance_qr(
     # 2. Geofencing Check
     is_proxy_suspected = False
     dist = 0.0
-    
+
     location_cfg = subject.get("location")
     if location_cfg:
         teacher_lat = float(location_cfg.get("lat", 0.0))
         teacher_lon = float(location_cfg.get("long", 0.0))
         radius = float(location_cfg.get("radius", 50.0))
-        
+
         dist = calculate_distance(
             teacher_lat, teacher_lon, payload.latitude, payload.longitude
         )
-        
+
         if dist > radius:
             is_proxy_suspected = True
     else:
@@ -152,7 +153,7 @@ async def mark_attendance_qr(
 
     # 3. Mark Attendance (Update Subject)
     today = date.today().isoformat()
-    
+
     # Check if student has already marked attendance today for this subject
     existing_subject = await db.subjects.find_one(
         {
@@ -160,18 +161,17 @@ async def mark_attendance_qr(
             "students": {
                 "$elemMatch": {
                     "student_id": student_oid,
-                    "attendance.lastMarkedAt": today
+                    "attendance.lastMarkedAt": today,
                 }
-            }
+            },
         }
     )
-    
+
     if existing_subject:
         raise HTTPException(
-            status_code=409,
-            detail="Attendance already marked for today"
+            status_code=409, detail="Attendance already marked for today"
         )
-    
+
     # Update the student's attendance in the subject document
     # 1. Push attendance record to the attendance array
     # 2. Increment present counter
@@ -183,35 +183,32 @@ async def mark_attendance_qr(
         "date": today,
         "status": "Present",
         "timestamp": datetime.now(UTC).isoformat(),
-        "method": "qr"
+        "method": "qr",
     }
-    
+
     result = await db.subjects.update_one(
-        {
-            "_id": subject_oid,
-            "students.student_id": student_oid
-        },
+        {"_id": subject_oid, "students.student_id": student_oid},
         {
             "$push": {"students.$.attendanceRecords": attendance_record},
             "$inc": {
                 "students.$.attendance.present": 1,
-                "students.$.attendance.total": 1
+                "students.$.attendance.total": 1,
             },
             "$set": {"students.$.attendance.lastMarkedAt": today},
-        }
+        },
     )
-    
+
     if result.modified_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Student not enrolled in this subject or already marked"
+            detail="Student not enrolled in this subject or already marked",
         )
-    
+
     # 4. Save audit record including is_proxy_suspected
     # Use a dedicated attendance_logs collection to store audit events,
     # avoiding unbounded growth and schema changes on the nested students
     # array in subjects.
-    
+
     log_entry = {
         "student_id": student_oid,
         "subject_id": subject_oid,
@@ -223,15 +220,15 @@ async def mark_attendance_qr(
         "longitude": payload.longitude,
         "distance_from_teacher": dist,
         "is_proxy_suspected": is_proxy_suspected,
-        "method": "qr"
+        "method": "qr",
     }
-    
+
     await db.attendance_logs.insert_one(log_entry)
 
     return {
         "message": "Attendance marked successfully",
         "proxy_suspected": is_proxy_suspected,
-        "distance": dist
+        "distance": dist,
     }
 
 
@@ -254,9 +251,7 @@ async def mark_attendance(request: Request, payload: Dict):
     # Extract device ID from header
     device_id = request.headers.get("X-Device-ID")
     if not device_id:
-        raise HTTPException(
-            status_code=400, detail="X-Device-ID header is required"
-        )
+        raise HTTPException(status_code=400, detail="X-Device-ID header is required")
 
     # Extract user from Authorization header
     auth_header = request.headers.get("Authorization")
@@ -592,26 +587,24 @@ async def confirm_attendance(payload: Dict):
 
     # Update percentage for all modified students
     # Fetch the subject to get updated student records
-    updated_subject = await db.subjects.find_one(
-        {"_id": subject_oid}, {"students": 1}
-    )
+    updated_subject = await db.subjects.find_one({"_id": subject_oid}, {"students": 1})
 
     if updated_subject:
         # Calculate and update percentages for students with attendance marked
         all_modified_student_ids = present_oids + absent_oids
-        
+
         for student in updated_subject.get("students", []):
             student_id = student.get("student_id")
             if student_id not in all_modified_student_ids:
                 continue
-            
+
             attendance = student.get("attendance", {})
             total = attendance.get("total", 0)
             present = attendance.get("present", 0)
-            
+
             # Calculate percentage
             percentage = round((present / total) * 100, 2) if total > 0 else 0
-            
+
             # Update percentage in database
             await db.subjects.update_one(
                 {"_id": subject_oid, "students.student_id": student_id},

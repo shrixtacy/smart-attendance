@@ -11,7 +11,6 @@ import base64
 from app.services.ml_client import ml_client
 
 from app.services import schedule_service
-from datetime import datetime
 import pytz
 import os
 # from typing import List
@@ -61,19 +60,21 @@ async def api_get_my_today_schedule(current_user: dict = Depends(get_current_use
     # Process entries for frontend
     schedule_list = []
     for entry in entries:
-        schedule_list.append({
-            "id": str(entry.get("_id", "")),
-            "subject_name": entry.get("subject_name", "Unknown Subject"),
-            "start_time": entry.get("start_time", ""),
-            "end_time": entry.get("end_time", ""),
-            "room": entry.get("room", ""),
-            "status": "scheduled" # Will be calculated on frontend or here
-        })
-    
+        schedule_list.append(
+            {
+                "id": str(entry.get("_id", "")),
+                "subject_name": entry.get("subject_name", "Unknown Subject"),
+                "start_time": entry.get("start_time", ""),
+                "end_time": entry.get("end_time", ""),
+                "room": entry.get("room", ""),
+                "status": "scheduled",  # Will be calculated on frontend or here
+            }
+        )
+
     return {
         "day": current_day,
         "date": now_in_school_tz.strftime("%Y-%m-%d"),
-        "classes": schedule_list
+        "classes": schedule_list,
     }
 
 
@@ -219,7 +220,7 @@ async def get_my_subjects(current_user: dict = Depends(get_current_user)):
         total = attendance_data.get("total", 0)
         present = attendance_data.get("present", 0)
         percentage = attendance_data.get("percentage", 0)
-        
+
         if total > 0 and percentage == 0:
             # Recalculate if total is set but percentage is 0
             percentage = round((present / total) * 100, 2)
@@ -324,8 +325,10 @@ async def add_subject(subject_id: str, current_user: dict = Depends(get_current_
 
     # Create a notification for each teacher
     if professor_ids:
-        notification_message = f"Student {student_name} has registered for {subject_name}."
-        
+        notification_message = (
+            f"Student {student_name} has registered for {subject_name}."
+        )
+
         for teacher_id in professor_ids:
             await db.notifications.insert_one(
                 {

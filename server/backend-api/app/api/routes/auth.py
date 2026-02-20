@@ -202,26 +202,32 @@ async def login(request: Request, payload: LoginRequest):
         device_id = request.headers.get("X-Device-ID")
         last_logout_time = user.get("last_logout_time")
         trusted_device_id = user.get("trusted_device_id")
-        
+
         if device_id and last_logout_time and trusted_device_id:
             # Normalize logout time to UTC
             if last_logout_time.tzinfo is None:
                 last_logout_time = last_logout_time.replace(tzinfo=timezone.utc)
-            
+
             # Check if less than 5 hours have passed since logout
             time_since_logout = datetime.now(UTC) - last_logout_time
             cooldown_period = timedelta(hours=5)
-            
+
             # If logging in from a different device within cooldown period
             if time_since_logout < cooldown_period and device_id != trusted_device_id:
-                hours_remaining = (cooldown_period - time_since_logout).total_seconds() / 3600
+                hours_remaining = (
+                    cooldown_period - time_since_logout
+                ).total_seconds() / 3600
                 logger.warning(
                     "Login attempt from new device within cooldown period for user: %s",
-                    payload.email
+                    payload.email,
                 )
                 raise HTTPException(
                     status_code=403,
-                    detail=f"DEVICE_COOLDOWN: You recently logged out. Please wait {hours_remaining:.1f} hours before logging in from a new device, or verify with OTP.",
+                    detail=(
+                        f"DEVICE_COOLDOWN: You recently logged out. Please wait "
+                        f"{hours_remaining:.1f} hours before logging in from a "
+                        "new device, or verify with OTP."
+                    ),
                 )
 
     # 5. Generate session ID and tokens
@@ -729,7 +735,9 @@ async def send_device_binding_otp(
     return SendDeviceBindingOtpResponse()
 
 
-@router.post("/verify-device-binding-otp", response_model=VerifyDeviceBindingOtpResponse)
+@router.post(
+    "/verify-device-binding-otp", response_model=VerifyDeviceBindingOtpResponse
+)
 async def verify_device_binding_otp(
     payload: VerifyDeviceBindingOtpRequest,
 ) -> dict:
@@ -846,7 +854,7 @@ async def verify_device_binding_otp(
 async def logout(request: Request):
     """
     Logout endpoint that tracks logout time for device binding cooldown.
-    
+
     When a user logs out, we save the timestamp. If they try to login from
     a new/untrusted device within 5 hours, they'll need OTP verification.
     """
@@ -859,7 +867,9 @@ async def logout(request: Request):
         decoded = decode_jwt(token)
         user_id = decoded.get("user_id")
     except (jwt.DecodeError, jwt.ExpiredSignatureError) as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {type(e).__name__}")
+        raise HTTPException(
+            status_code=401, detail=f"Invalid token: {type(e).__name__}"
+        )
     except Exception as e:
         logger.error("Unexpected error during token decode: %s", e)
         raise HTTPException(status_code=401, detail="Invalid token")
@@ -879,4 +889,3 @@ async def logout(request: Request):
 
     logger.info("User logged out: %s", user_id)
     return {"message": "Logged out successfully"}
-
