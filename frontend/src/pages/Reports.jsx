@@ -474,7 +474,7 @@ const goToPage = (page) => {
         disabled={currentPage === totalPages}
         className="px-3 py-1 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Next
+        {t('reports.pagination.next')}
       </button>
     </div>
 
