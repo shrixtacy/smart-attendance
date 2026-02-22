@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Download,
@@ -15,6 +16,7 @@ import DateRange from '../components/DateRange.jsx';
 import 'react-datepicker/dist/react-datepicker.css';
 import { useTranslation } from "react-i18next";
 import { toast } from "react-hot-toast";
+//import { fetchStudentById } from "../api/teacher";
 
 // Named constant for the default export date range (in days)
 const REPORT_DATE_RANGE_DAYS = 30;
@@ -30,6 +32,10 @@ export default function Reports() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
   const [loadingFormat, setLoadingFormat] = useState(null); // "pdf" | "csv" | null
 
+  //Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage] = useState(25);
+
   // Fetch Subjects on Mount
   useEffect(() => {
     fetchMySubjects().then(setSubjects);
@@ -38,7 +44,11 @@ export default function Reports() {
   // Fetch Students when Subject/Date changes
   useEffect(() => {
     if (!selectedSubject) return;
-    fetchSubjectStudents(selectedSubject).then(setStudents);
+    //fetchSubjectStudents(selectedSubject).then(setStudents);
+    fetchSubjectStudents(selectedSubject).then(data => {
+    console.log("Students API response:", data);
+    setStudents(data);
+  });
   }, [selectedSubject, startDate]);
 
   // Filter Verified Students
@@ -130,6 +140,27 @@ export default function Reports() {
       }
     });
   }, [enhancedStudents, sortConfig]);
+
+  // Reset page when subject changes or rowsPerPage changes
+useEffect(() => {
+  setCurrentPage(1);
+}, [selectedSubject, rowsPerPage]);
+
+const totalStudents = sortedStudents.length;
+const totalPages = Math.max(1, Math.ceil(totalStudents / rowsPerPage));
+
+const startIndex = (currentPage - 1) * rowsPerPage;
+const endIndex = startIndex + rowsPerPage;
+
+const paginatedStudents = sortedStudents.slice(startIndex, endIndex);
+
+const showingFrom = totalStudents === 0 ? 0 : startIndex + 1;
+const showingTo = Math.min(endIndex, totalStudents);
+
+const goToPage = (page) => {
+  const safePage = Math.min(Math.max(page, 1), totalPages || 1);
+  setCurrentPage(safePage);
+};
 
   // Get Sort Icon Helper
   const getSortIcon = (columnKey) => {
@@ -363,13 +394,13 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border-color)]">
-                {sortedStudents.length > 0 ? (
-                  sortedStudents.map((row) => (
-                    <tr key={row._id} className="hover:bg-[var(--bg-secondary)] transition-colors">
+                {paginatedStudents.length > 0 ? (
+                  paginatedStudents.map((row) => (
+                    <tr key={row.student_id} className="hover:bg-[var(--bg-secondary)] transition-colors">
                       <td className="px-6 py-4">
                         <div>
                           <div className="font-semibold text-[var(--text-main)]">{row.name}</div>
-                          <div className="text-xs text-[var(--text-body)] opacity-70">{t('reports.table.student_id')}: {row.roll_number}</div>
+                          <div className="text-xs text-[var(--text-body)] opacity-70">{t('reports.table.student_id')}: {row.roll}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-[var(--text-body)]">{row.total}</td>
@@ -396,32 +427,59 @@ export default function Reports() {
           {/* Footer */}
           {sortedStudents.length > 0 && (
             <div className="bg-[var(--bg-secondary)] p-4 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-[var(--text-body)] border-t border-[var(--border-color)]">
-              <span>
-                {t('reports.footer.showing', { count: sortedStudents.length })}
-                {sortConfig.key && (
-                  <> • {t('reports.footer.sorted_by', {
-                    key: t(`reports.footer.sort_keys.${sortConfig.key}`),
-                    direction: t(`reports.footer.sort_dir.${sortConfig.direction}`)
-                  })}</>
-                )}
-              </span>
+    
+            {/* Left text */}
+            <span>
+            {t('reports.pagination.showing', { showingFrom, showingTo, totalStudents })}
+            {sortConfig.key && (
+              <> • {t('reports.footer.sorted_by', {
+                key: t(`reports.footer.sort_keys.${sortConfig.key}`),
+                direction: t(`reports.footer.sort_dir.${sortConfig.direction}`)
+                })}</>
+            )}
+          </span>
 
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--success)]"></span>
-                  <span>{t('reports.footer.good', { threshold })}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--warning)]"></span>
-                  <span>{t('reports.footer.warning')}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[var(--danger)]"></span>
-                  <span>{t('reports.footer.at_risk')}</span>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Middle legend */}
+          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[var(--success)]"></span>
+          <span>{t('reports.footer.good', { threshold })}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[var(--warning)]"></span>
+            <span>{t('reports.footer.warning')}</span>
+        </div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-2 h-2 rounded-full bg-[var(--danger)]"></span>
+        <span>{t('reports.footer.at_risk')}</span>
+      </div>
+    </div>
+
+    {/* Right pagination buttons */}
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="px-3 py-1 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {t('reports.pagination.previous')}
+      </button>
+
+      <span className="text-xs text-[var(--text-body)]">
+        {t('reports.pagination.page_info', { current: currentPage, total: totalPages })}
+      </span>
+
+      <button
+        onClick={() => goToPage(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="px-3 py-1 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {t('reports.pagination.next')}
+      </button>
+    </div>
+
+  </div>
+)}
         </div>
       </div>
     </div>
