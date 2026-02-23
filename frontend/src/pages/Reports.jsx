@@ -23,7 +23,7 @@ import { toast } from "react-hot-toast";
 export default function Reports() {
   const { t: _t } = useTranslation();
 
-  const [threshold] = useState(75);
+
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [students, setStudents] = useState([]);
