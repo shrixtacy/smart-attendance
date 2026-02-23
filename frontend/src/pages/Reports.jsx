@@ -5,12 +5,10 @@ import {
   FileText,
   ChevronDown,
   RotateCcw,
-  Search,
   Filter,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Loader2
 } from "lucide-react";
 
 import { fetchMySubjects, fetchSubjectStudents } from "../api/teacher";
@@ -46,10 +44,10 @@ export default function Reports() {
     if (!selectedSubject) return;
     //fetchSubjectStudents(selectedSubject).then(setStudents);
     fetchSubjectStudents(selectedSubject).then(data => {
-    console.log("Students API response:", data);
+   console.log("Students API response:", data);
     setStudents(data);
   });
-  }, [selectedSubject, startDate]);
+  }, [selectedSubject, startDate, endDate]);
 
   const verifiedStudents = students.filter((s) => s.verified === true);
   
@@ -192,7 +190,7 @@ const goToPage = (page) => {
       window.URL.revokeObjectURL(url);
 toast.success(t('reports.download_success', { format: format.toUpperCase() }));
     
-    } catch (err) {
+    } catch  {
 toast.error(t('reports.export_failed'));
     } finally {
       setLoadingFormat(null);
@@ -204,15 +202,7 @@ toast.error(t('reports.export_failed'));
 
   return (
     <div className="min-h-screen p-6">
-      <h2 className="text-xl font-bold mb-4">Reports</h2>
-
-      <DateRange
-        onChange={({ start, end }) => {
-          setStartDate(start);
-          setEndDate(end);
-        }}
-      />
-
+     <h2 className="text-xl font-bold mb-4">{t('reports.title')}</h2>
       <div className="flex gap-3 my-4">
         <button onClick={handleExportCSV}>
           {loadingFormat === "csv" ? "Loading..." : "Export CSV"}
@@ -238,9 +228,12 @@ toast.error(t('reports.export_failed'));
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-end">
 
-            <DateRange
-              onChange={(date) => setStartDate(date)}
-            />
+          <DateRange
+  onChange={({ start, end }) => {
+    setStartDate(start);
+    setEndDate(end);
+  }}
+/>
 
             {/* Classes Selector */}
             <div className="md:col-span-4 space-y-2">
