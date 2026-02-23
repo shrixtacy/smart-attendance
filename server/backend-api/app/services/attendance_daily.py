@@ -13,12 +13,11 @@ async def ensure_indexes():
         [("subjectId", 1)],
         unique=True,
     )
-    
-    # Expire documents 86400 seconds (24 hours) after the 'createdAt' time
+
+    # Expire documents 24 hours after createdAt (MongoDB 4.2+ builds non-blocking)
     await db.attendance_logs.create_index(
-        "createdAt", 
+        "createdAt",
         expireAfterSeconds=86400,
-        background=True
     )
 
 

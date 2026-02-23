@@ -230,7 +230,7 @@ async def get_my_subjects(current_user: dict = Depends(get_current_user)):
         results.append(
             {
                 "id": str(sub["_id"]),
-                "name": str(sub["name"]),
+                "name": str(sub.get("name") or "Unknown"),
                 "code": str(sub.get("code") or ""),
                 "type": str(sub.get("type") or "Core"),
                 "attendance": percentage,

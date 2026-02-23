@@ -365,7 +365,11 @@ async def get_my_subjects(current_user: dict = Depends(get_current_teacher)):
             "name": s["name"],
             "code": s.get("code"),
             "student_count": len(s.get("students", [])),
-            "students": [str(student["student_id"]) for student in s.get("students", [])],
+            "students": [
+                str(st["student_id"])
+                for st in s.get("students", [])
+                if "student_id" in st
+            ],
         }
         for s in subjects
     ]
@@ -484,18 +488,22 @@ async def get_all_students(current_user: dict = Depends(get_current_teacher)):
 
     # Get all subjects taught by the teacher
     subjects = await db.subjects.find({"professor_ids": prof_id}).to_list(length=None)
-    
+
     # Aggregate all student IDs from these subjects
     student_user_ids = set()
     for subject in subjects:
         for student in subject.get("students", []):
-            student_user_ids.add(student["student_id"])
+            sid = student.get("student_id")
+            if sid:
+                student_user_ids.add(sid)
 
     if not student_user_ids:
         return {"students": []}
 
     # Get students
-    students = await db.students.find({"userId": {"$in": list(student_user_ids)}}).to_list(length=None)
+    students = await db.students.find(
+        {"userId": {"$in": list(student_user_ids)}}
+    ).to_list(length=None)
 
     if not students:
         return {"students": []}
