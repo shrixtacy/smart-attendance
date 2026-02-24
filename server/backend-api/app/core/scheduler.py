@@ -17,7 +17,7 @@ def start_scheduler():
         replace_existing=True,
         name="Monthly Low Attendance Alerts",
     )
-    
+
     # Batch flush every 5 minutes
     scheduler.add_job(
         flush_attendance_data,
@@ -26,6 +26,7 @@ def start_scheduler():
         id="flush_attendance_data",
         replace_existing=True,
         name="Flush Attendance Buffer",
+        max_instances=1,
     )
 
     scheduler.start()

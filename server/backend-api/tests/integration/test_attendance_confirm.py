@@ -32,8 +32,7 @@ async def test_confirm_attendance_invalid_student_id_returns_400(client: AsyncCl
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid ObjectId at present_students[0]"
-
+    assert response.json()["detail"] == "Invalid ObjectId in present_students: bad-student-id"
 
 @pytest.mark.asyncio
 async def test_confirm_attendance_invalid_absent_student_id_returns_400(
@@ -49,8 +48,7 @@ async def test_confirm_attendance_invalid_absent_student_id_returns_400(
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid ObjectId at absent_students[0]"
-
+    assert response.json()["detail"] == "Invalid ObjectId in absent_students: bad-student-id"
 
 @pytest.mark.asyncio
 async def test_confirm_attendance_overlap_students_returns_400(client: AsyncClient):

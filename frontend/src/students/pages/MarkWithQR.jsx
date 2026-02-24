@@ -38,7 +38,7 @@ export default function MarkWithQR() {
                 setShowDeviceBindingModal(true);
             }
         }
-    }, []);
+    }, [DEVICE_BINDING_STATE_VALIDITY_MS]);
 
     const startScanning = () => {
         if (!navigator.geolocation) {

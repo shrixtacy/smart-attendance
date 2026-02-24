@@ -261,19 +261,19 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
             notif["_id"] = str(notif["_id"])
             if "user_id" in notif:
                 notif["user_id"] = str(notif["user_id"])
-            
+
             if "created_at" in notif:
                 if hasattr(notif["created_at"], "isoformat"):
                     notif["created_at"] = notif["created_at"].isoformat()
                 else:
                     notif["created_at"] = str(notif["created_at"])
-            
+
             # Recursive ObjectId serialization for metadata
             if "metadata" in notif and isinstance(notif["metadata"], dict):
                 for k, v in notif["metadata"].items():
                     if isinstance(v, ObjectId):
                         notif["metadata"][k] = str(v)
-            
+
             # Serialize any OTHER ObjectId fields at root level
             for k, v in notif.items():
                 if isinstance(v, ObjectId) and k not in ["_id", "user_id"]:

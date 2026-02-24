@@ -243,13 +243,20 @@ async def login(request: Request, payload: LoginRequest):
     )
 
     # 6. Store hashed session ID in database (invalidates previous sessions)
+    update_data = {
+        "current_active_session": hash_session_id(session_id),
+        "session_created_at": datetime.now(UTC),
+    }
+    
+    # If this is the first login (no trusted device yet) and a device ID is provided,
+    # bind it automatically
+    if user["role"] == "student" and not user.get("trusted_device_id") and request.headers.get("X-Device-ID"):
+        update_data["trusted_device_id"] = request.headers.get("X-Device-ID")
+
     await db.users.update_one(
         {"_id": user["_id"]},
         {
-            "$set": {
-                "current_active_session": hash_session_id(session_id),
-                "session_created_at": datetime.now(UTC),
-            }
+            "$set": update_data
         },
     )
 

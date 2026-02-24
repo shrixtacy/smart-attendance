@@ -625,8 +625,9 @@ async def confirm_attendance(payload: Dict):
     today = date.today().isoformat()
 
     # Mark PRESENT students - increment total AND present
+    present_updated = 0
     if present_oids:
-        await db.subjects.update_one(
+        result = await db.subjects.update_one(
             {"_id": subject_oid},
             {
                 "$inc": {
@@ -642,10 +643,12 @@ async def confirm_attendance(payload: Dict):
                 }
             ],
         )
+        present_updated = result.modified_count
 
     # Mark ABSENT students - increment total AND absent
+    absent_updated = 0
     if absent_oids:
-        await db.subjects.update_one(
+        result = await db.subjects.update_one(
             {"_id": subject_oid},
             {
                 "$inc": {
@@ -661,6 +664,7 @@ async def confirm_attendance(payload: Dict):
                 }
             ],
         )
+        absent_updated = result.modified_count
 
     # Update percentage for all modified students
     # Fetch the subject to get updated student records
@@ -700,12 +704,12 @@ async def confirm_attendance(payload: Dict):
         subject_id=subject_oid,
         teacher_id=teacher_id,
         record_date=today,
-        present=len(present_oids),
-        absent=len(absent_oids),
+        present=len(present_set),
+        absent=len(absent_set),
     )
 
     return {
         "ok": True,
-        "present_updated": len(present_oids),
-        "absent_updated": len(absent_oids),
+        "present_updated": len(present_set),
+        "absent_updated": len(absent_set),
     }
