@@ -125,7 +125,7 @@ export default function Analytics() {
             dateTo: end,
             classId: isGlobal ? undefined : selectedSubject
         };
-        const trendRes = await fetchAttendanceTrend(trendParams).catch(err => ({ data: [] }));
+        const trendRes = await fetchAttendanceTrend(trendParams).catch(() => ({ data: [] }));
         
         if (isMounted) {
              setTrendData((trendRes.data || []).map(item => ({

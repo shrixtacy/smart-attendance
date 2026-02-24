@@ -155,7 +155,7 @@ async def get_subject_analytics(
     
     # Calculate Subject Totals for Pie Chart
     # We iterate over students_info again or stats_list?
-    # Actually request says "Subject Specific Stats (Pie Chart) GET /api/analytics/subject/{subject_id}"
+    # Actually request says "Subject Specific Stats (Pie Chart) GET /api/analytics/subject/{subject_id}"  # noqa: E501
     # The existing response model SubjectStatsResponse doesn't seem to have totals.
     # I should add totals to the response.
     # But for now, I'll calculate totals from students_info.
@@ -220,7 +220,9 @@ async def get_attendance_trend(
         try:
             class_oid = ObjectId(classId)
             if class_oid not in subject_ids:
-                 raise HTTPException(status_code=403, detail="You do not have access to this class")
+                raise HTTPException(
+                    status_code=403, detail="You do not have access to this class"
+                )
             match_filter["subjectId"] = class_oid
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid classId format")
