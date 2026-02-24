@@ -132,7 +132,12 @@ export default function StudentNavigation({ activePage = "home" }) {
             active={activePage === item.id}
           />
         ))}
-  
+    <div>
+    <LogOut className="cursor-pointer text-[var(--text-body)] hover:text-[var(--danger)] transition-colors" color="red" size={28} onClick={()=>{
+                localStorage.setItem("user", null);
+                navigate("/");
+              }}/>
+   </div>
       </div>
      
     </>
