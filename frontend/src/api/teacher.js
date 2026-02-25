@@ -17,7 +17,7 @@ export const deleteStudent = (subjectId, studentId) =>
   api.delete(`/settings/teachers/subjects/${subjectId}/students/${studentId}`);
 
 export const exportAttendanceCSV = async (subjectId, startDate, endDate) => {
-  const res = await api.get(`/reports/export/csv`, {
+  const res = await api.get(`/api/reports/export/csv`, {
     params: {
       subject_id: subjectId,
       start_date: startDate ? startDate.toISOString().split('T')[0] : null,
@@ -27,3 +27,15 @@ export const exportAttendanceCSV = async (subjectId, startDate, endDate) => {
   });
   return res.data;
 };
+
+export const exportCombinedReport = async (startDate, endDate) => {
+  const res = await api.get(`/api/reports/export/combined-pdf`, {
+    params: {
+      start_date: startDate ? startDate.toISOString().split('T')[0] : null,
+      end_date: endDate ? endDate.toISOString().split('T')[0] : null
+    },
+    responseType: 'blob'
+  });
+  return res.data;
+};
+

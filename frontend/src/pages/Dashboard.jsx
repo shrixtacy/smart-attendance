@@ -13,6 +13,8 @@ import {
 } from "lucide-react"; 
 import { getTodaySchedule } from "../api/schedule";
 import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
+import { exportCombinedReport } from "../api/teacher";
+import { toast } from "react-hot-toast";
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const [mlStatus, setMlStatus] = useState("checking"); // checking, ready, waking-up
   const [todayClasses, setTodayClasses] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [tick, setTick] = useState(0); // Periodic tick for real-time status updates
 
   useEffect(() => {
@@ -160,6 +163,36 @@ export default function Dashboard() {
     return null;
   }, [todayClasses, tick]); // Re-compute when classes or tick changes
 
+  const handleDownloadReport = async () => {
+    try {
+      setDownloadingReport(true);
+      toast.loading(t('dashboard.generating_report'), { id: 'report-toast' });
+      
+      const blob = await exportCombinedReport();
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Set filename with date
+      const date = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `combined_attendance_report_${date}.pdf`);
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      
+      toast.success(t('dashboard.report_downloaded'), { id: 'report-toast' });
+    } catch (error) {
+      console.error("Failed to download report:", error);
+      toast.error(t('dashboard.report_failed'), { id: 'report-toast' });
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   const getStatusBadge = () => {
     switch (mlStatus) {
       case "ready":
@@ -199,9 +232,17 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <button className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer text-sm">
-              <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden xs:inline">{t('dashboard.download_report')}</span>
+            <button 
+              onClick={handleDownloadReport}
+              disabled={downloadingReport}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {downloadingReport ? (
+                <Loader2 size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" />
+              ) : (
+                <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
+              )}
+              <span className="hidden xs:inline">{downloadingReport ? t('dashboard.generating') : t('dashboard.download_report')}</span>
             </button>
             <Link to="/attendance" className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium shadow-sm flex items-center justify-center gap-2 transition-colors text-sm">
               <Play size={16} fill="currentColor" className="sm:w-[18px] sm:h-[18px]" />
