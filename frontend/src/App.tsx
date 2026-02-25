@@ -18,7 +18,7 @@ const ManageSchedule = lazy(() => import("./pages/ManageSchedule"));
 const Settings = lazy(() => import("./pages/Settings"));
 const AddStudents = lazy(() => import("./pages/AddStudents"));
 const Login = lazy(() => import("./pages/Login"));
-const Register = lazy(() => import("./pages/Register"));
+const Register = lazy(() => import("./pages/Register copy"));
 const Messaging = lazy(() => import("./pages/Messaging"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));

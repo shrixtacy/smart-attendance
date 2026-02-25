@@ -3,7 +3,6 @@ import {
   Search,  
   Download, 
   Plus, 
-  MoreHorizontal, 
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
@@ -270,13 +269,12 @@ export default function StudentList() {
                     <th className="px-6 py-4">{t('students.table.student')}</th>
                     <th className="px-6 py-4">{t('students.table.visual_grade')}</th>
                     <th className="px-6 py-4">{t('students.table.trend')}</th>
-                    <th className="px-6 py-4 text-right">{t('students.table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-color)]">
                   {sortedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-12 text-center">
+                      <td colSpan="4" className="px-6 py-12 text-center">
                         <div className="text-[var(--text-body)] opacity-80">
                           <p className="text-lg font-medium">{t('students.no_students_found')}</p>
                           <p className="text-sm mt-1">
@@ -369,13 +367,6 @@ export default function StudentList() {
                               {t('students.trend.no_change')}
                             </div>
                           )}
-                        </td>
-
-                        {/* Actions Column */}
-                        <td className="px-6 py-4 text-right">
-                          <button className="text-[var(--text-body)]/50 hover:text-[var(--text-body)] p-1 hover:bg-[var(--bg-secondary)] rounded-full transition">
-                            <MoreHorizontal size={20} />
-                          </button>
                         </td>
                       </tr>
                     );
