@@ -27,3 +27,15 @@ export const exportAttendanceCSV = async (subjectId, startDate, endDate) => {
   });
   return res.data;
 };
+
+export const exportStudentRoster = async (subjectId = null) => {
+  const params = new URLSearchParams();
+  if (subjectId) {
+    params.append("subject_id", subjectId);
+  }
+  
+  const res = await api.get(`/students/export/roster/pdf?${params}`, {
+    responseType: 'blob'
+  });
+  return res.data;
+};
