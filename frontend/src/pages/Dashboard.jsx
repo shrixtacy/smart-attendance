@@ -12,7 +12,10 @@ import {
   AlertTriangle
 } from "lucide-react"; 
 import { getTodaySchedule } from "../api/schedule";
+import { fetchDashboardStats } from "../api/analytics";
 import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
+import { exportCombinedReport } from "../api/teacher";
+import { toast } from "react-hot-toast";
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -24,7 +27,26 @@ export default function Dashboard() {
   const [mlStatus, setMlStatus] = useState("checking"); // checking, ready, waking-up
   const [todayClasses, setTodayClasses] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [downloadingReport, setDownloadingReport] = useState(false);
   const [tick, setTick] = useState(0); // Periodic tick for real-time status updates
+
+  // Fetch dashboard stats
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const stats = await fetchDashboardStats();
+        setDashboardStats(stats);
+      } catch (error) {
+        console.error("Failed to load dashboard stats", error);
+        // Fallback or leave as null (will show 0 or -)
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    loadStats();
+  }, []);
 
   useEffect(() => {
     const checkMlService = async () => {
@@ -160,6 +182,36 @@ export default function Dashboard() {
     return null;
   }, [todayClasses, tick]); // Re-compute when classes or tick changes
 
+  const handleDownloadReport = async () => {
+    try {
+      setDownloadingReport(true);
+      toast.loading(t('dashboard.generating_report'), { id: 'report-toast' });
+      
+      const blob = await exportCombinedReport();
+      
+      // Create a URL for the blob
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Set filename with date
+      const date = new Date().toISOString().split('T')[0];
+      link.setAttribute('download', `combined_attendance_report_${date}.pdf`);
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      
+      toast.success(t('dashboard.report_downloaded'), { id: 'report-toast' });
+    } catch (error) {
+      console.error("Failed to download report:", error);
+      toast.error(t('dashboard.report_failed'), { id: 'report-toast' });
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
+
   const getStatusBadge = () => {
     switch (mlStatus) {
       case "ready":
@@ -199,9 +251,17 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <button className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer text-sm">
-              <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden xs:inline">{t('dashboard.download_report')}</span>
+            <button 
+              onClick={handleDownloadReport}
+              disabled={downloadingReport}
+              className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium transition-colors flex items-center justify-center gap-2 cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {downloadingReport ? (
+                <Loader2 size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" />
+              ) : (
+                <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
+              )}
+              <span className="hidden xs:inline">{downloadingReport ? t('dashboard.generating') : t('dashboard.download_report')}</span>
             </button>
             <Link to="/attendance" className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium shadow-sm flex items-center justify-center gap-2 transition-colors text-sm">
               <Play size={16} fill="currentColor" className="sm:w-[18px] sm:h-[18px]" />
@@ -269,10 +329,22 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 xs:grid-cols-3 gap-3 sm:gap-4">
               {/* Stat 1 */}
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5 relative overflow-hidden">
-                <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.attendance_rate')}</p>
+                <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">
+                  {dashboardStats?.timeframe === 'week' ? t('dashboard.stats.attendance_rate_week') : t('dashboard.stats.attendance_rate')}
+                </p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">94%</h3>
-                  <span className="text-xs bg-[var(--text-on-primary)]/15 px-2 py-1 rounded text-[var(--text-on-primary)]/90">{t('dashboard.stats.increase')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.attendanceRate ?? 0}%</h3>
+                      {dashboardStats?.increase !== undefined && (
+                        <span className="text-xs bg-[var(--text-on-primary)]/15 px-2 py-1 rounded text-[var(--text-on-primary)]/90">
+                          {dashboardStats.increase ? t('dashboard.stats.increase') : t('dashboard.stats.decrease')}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -280,8 +352,14 @@ export default function Dashboard() {
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5">
                 <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.absent')}</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">7</h3>
-                  <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.all_classes')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.absent ?? 0}</h3>
+                      <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.all_classes')}</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -289,8 +367,14 @@ export default function Dashboard() {
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5">
                 <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.late_arrivals')}</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">3</h3>
-                  <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.first_period')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.late ?? 0}</h3>
+                      <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.first_period')}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

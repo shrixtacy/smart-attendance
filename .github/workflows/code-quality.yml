@@ -17,24 +17,24 @@ jobs:
       with:
         python-version: "3.11"
         
-    - name: Install Ruff and Black
-      run: pip install ruff black
+    - name: Install Ruff
+      run: pip install ruff
+      
+    - name: Run Ruff format check on backend-api
+      working-directory: ./server/backend-api
+      run: ruff format --check .
       
     - name: Run Ruff on backend-api
       working-directory: ./server/backend-api
       run: ruff check .
       
-    - name: Run Black on backend-api
-      working-directory: ./server/backend-api
-      run: black --check .
-      
+    - name: Run Ruff format check on ml-service
+      working-directory: ./server/ml-service
+      run: ruff format --check .
+
     - name: Run Ruff on ml-service
       working-directory: ./server/ml-service
       run: ruff check .
-
-    - name: Run Black on ml-service
-      working-directory: ./server/ml-service
-      run: black --check .
 
   js-lint:
     runs-on: ubuntu-latest

@@ -308,9 +308,7 @@ async def delete_all_notifications(
     try:
         user_oid = ObjectId(current_user["id"])
 
-        result = await db.notifications.delete_many(
-            {"user_id": user_oid}
-        )
+        result = await db.notifications.delete_many({"user_id": user_oid})
 
         return {
             "message": f"Deleted {result.deleted_count} notifications",
@@ -318,9 +316,7 @@ async def delete_all_notifications(
         }
     except Exception as e:
         logger.error(f"Error deleting all notifications: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail="Failed to delete notifications"
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete notifications")
 
 
 @router.delete("/in-app/{notification_id}")

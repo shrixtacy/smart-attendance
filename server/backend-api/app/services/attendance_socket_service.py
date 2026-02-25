@@ -1,9 +1,8 @@
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Dict, List, Any
 
 import socketio
-from datetime import UTC
 from bson import ObjectId
 from pymongo import UpdateOne
 
@@ -237,7 +236,7 @@ async def flush_attendance_data():
                             "subject_id": ObjectId(subject_id),
                             "date": today_str,
                             "timestamp": scan["timestamp"],
-                            "createdAt": datetime.now(UTC),
+                            "createdAt": datetime.now(timezone.utc),
                             "session_id": session_id,
                             "latitude": scan["location"]["lat"],
                             "longitude": scan["location"]["lon"],
@@ -324,7 +323,7 @@ async def stop_and_save_session(session_id: str):
                                 "subject_id": ObjectId(subject_id),
                                 "date": today_str,
                                 "timestamp": scan["timestamp"],
-                                "createdAt": datetime.now(UTC),
+                                "createdAt": datetime.now(timezone.utc),
                                 "session_id": session_id,
                                 "latitude": scan["location"]["lat"],
                                 "longitude": scan["location"]["lon"],

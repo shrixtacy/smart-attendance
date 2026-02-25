@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 from bson import ObjectId
 
@@ -55,11 +55,11 @@ async def save_daily_summary(
                 "total": total,
                 "percentage": percentage,
             },
-            "updatedAt": datetime.now(UTC),
+            "updatedAt": datetime.now(timezone.utc),
         },
         "$setOnInsert": {
             "subjectId": subject_id,
-            "createdAt": datetime.now(UTC),
+            "createdAt": datetime.now(timezone.utc),
         },
     }
 

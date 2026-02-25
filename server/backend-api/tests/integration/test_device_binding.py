@@ -10,7 +10,7 @@ Tests cover:
 import pytest
 from httpx import AsyncClient
 from unittest.mock import patch, AsyncMock
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from bson import ObjectId
 
 from app.core.security import hash_password
@@ -71,7 +71,7 @@ async def test_teacher_exempt_from_device_binding(client: AsyncClient, db):
         "phone": "1234567890",
         "branch": "CSE",
         "subjects": [],
-        "createdAt": datetime.now(UTC),
+        "createdAt": datetime.now(timezone.utc),
     }
     await db.teachers.insert_one(teacher_doc)
 
@@ -491,7 +491,10 @@ async def test_student_login_device_cooldown(client: AsyncClient, db):
             "email": register_payload["email"],
             "password": register_payload["password"],
         },
-        headers={"X-Device-ID": "device-B-67890", "X-Forwarded-For": "127.0.0.6"},  # Different device
+        headers={
+            "X-Device-ID": "device-B-67890",
+            "X-Forwarded-For": "127.0.0.6",
+        },  # Different device
     )
 
     # Should get cooldown error
