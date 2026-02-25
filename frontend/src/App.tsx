@@ -23,6 +23,10 @@ const Messaging = lazy(() => import("./pages/Messaging"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
 
+// Parent Pages
+const ParentDashboardLayout = lazy(() => import("./pages/Parents/layouts/ParentDashboardLayout"));
+const ParentOverview = lazy(() => import("./pages/Parents/ParentOverview"));
+
 // Student pages
 import StudentDashboard from "./students/pages/StudentDashboard";
 import StudentSubjects from "./students/pages/StudentSubjects";
@@ -44,6 +48,7 @@ function RedirectToHome() {
 
   if (user.role === "teacher") return <Navigate to={"/dashboard"} />;
   if (user.role === "student") return <Navigate to={"/student-dashboard"} />;
+  if (user.role === "parent") return <Navigate to={"/parent/dashboard"} />;
 
   return <Navigate to={"/login"} />;
 }
@@ -70,7 +75,7 @@ export default function App() {
   const { isModalOpen, closeModal, userEmail, handleSuccess } =
     useDeviceBinding();
 
-  const hideNavbar = hideNavbarRoutes.includes(location.pathname);
+  const hideNavbar = hideNavbarRoutes.includes(location.pathname) || location.pathname.startsWith("/parent");
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
@@ -115,6 +120,15 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="*" element={<div>404 Not Found</div>} />
+
+            {/* Parent Routes */}
+            <Route path="/parent" element={<ParentDashboardLayout />}>
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<ParentOverview />} />
+              <Route path="academics" element={<div>Academics View (Coming Soon)</div>} />
+              <Route path="reports" element={<div>Reports View (Coming Soon)</div>} />
+              <Route path="messages" element={<div>Messages View (Coming Soon)</div>} />
+            </Route>
 
             {/* Students routes */}
             <Route path="/student-dashboard" element={<StudentDashboard />} />
