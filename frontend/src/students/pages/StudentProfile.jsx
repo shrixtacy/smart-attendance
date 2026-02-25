@@ -474,28 +474,30 @@ export default function StudentProfile() {
                 </div>
               </div>
             )}
+            <div className="block pb-4 md:hidden">
+  <div
+    className="flex justify-center gap-2 items-center px-12 py-1 rounded-2xl cursor-pointer"
+    onClick={() => setLogoutOpen(true)}
+  >
+    <span className="text-red-500">
+      {t("profile.logout")}
+    </span>
+    <LogOut
+      className="text-[var(--danger)] transition-colors"
+      size={24}
+    />
+  </div>
+</div>
 
-            { /* Logout Button for devices less than 760px (Mobile) */ }
-      <div className="block pb-4 md:hidden lg:hidden xl:hidden">
-         <div 
-         className="flex  justify-center gap-2 items-center px-13 py-1 rounded-2x"
-          onClick={()=> setLogoutOpen(true)}
-         >
-            <span className="text-red-500">Logout</span>
-                <LogOut 
-                   className="cursor-pointer text-[var(--text-body)] hover:text-[var(--danger)] transition-colors" color="red" size={24}
-                 />
-                <LogoutConfirmDialog 
-                   isOpen={isLogoutOpen}
-                   onClose={() => setLogoutOpen(false)}
-                   onConfirm={()=> {
-                   localStorage.removeItem("user");
-                   localStorage.removeItem("token"); /*  ----- Removing token to ensure that api not calls after user logout ----- */
-                   navigate("/");
-                 }}
-                />
-               </div>
-             </div>
+<LogoutConfirmDialog
+  isOpen={isLogoutOpen}
+  onClose={() => setLogoutOpen(false)}
+  onConfirm={() => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    navigate("/");
+  }}
+/>
              
           </div>
         )}
