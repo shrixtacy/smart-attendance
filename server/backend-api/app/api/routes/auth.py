@@ -767,7 +767,7 @@ async def verify_device_binding_otp(
         await db.users.update_one(
             {"_id": user["_id"]},
             {
-                "$unset": {
+                "$unset": {   # nosec B105 - MongoDB unset operator, not a password
                     "device_binding_otp_hash": 1,
                     "device_binding_otp_expiry": 1,
                     "device_binding_new_device_id": 1,
@@ -787,7 +787,7 @@ async def verify_device_binding_otp(
             await db.users.update_one(
                 {"_id": user["_id"]},
                 {
-                    "$unset": {
+                    "$unset": {   # nosec B105 - MongoDB unset operator, not a password
                         "device_binding_otp_hash": 1,
                         "device_binding_otp_expiry": 1,
                         "device_binding_new_device_id": 1,
@@ -820,8 +820,8 @@ async def verify_device_binding_otp(
             await db.users.update_one(
                 {"_id": user["_id"]},
                 {
-                    "$unset": {
-                        "device_binding_otp_hash": 1,
+                    "$unset": {   # nosec B105 - MongoDB unset operator, not a password
+                        "device_binding_otp_hash": 1,   
                         "device_binding_otp_expiry": 1,
                         "device_binding_new_device_id": 1,
                         "device_binding_otp_failed_attempts": 1,
@@ -837,7 +837,7 @@ async def verify_device_binding_otp(
             "$set": {
                 "trusted_device_id": payload.new_device_id,
             },
-            "$unset": {
+            "$unset": {   # nosec B105 - MongoDB unset operator, not a password
                 "device_binding_otp_hash": 1,
                 "device_binding_otp_expiry": 1,
                 "device_binding_new_device_id": 1,
@@ -888,7 +888,7 @@ async def logout(request: Request):
             "$set": {
                 "last_logout_time": datetime.now(UTC),
             },
-            "$unset": {
+            "$unset": {   # nosec B105 - MongoDB unset operator, not a password
                 "current_active_session": 1,
             },
         },

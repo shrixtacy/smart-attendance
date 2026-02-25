@@ -11,7 +11,8 @@ import {
   TrendingUp, 
   User,
   Menu,
-  QrCode
+  QrCode,
+  LogOut
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import StudentNavigation from "../components/StudentNavigation"
