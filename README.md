@@ -1259,11 +1259,11 @@ We take security seriously and will respond promptly to all reports.
 
 ### Version 1.1 (In Progress)
 
-- [ ] Attendance analytics
-- [ ] Email notifications
-- [ ] Reports generation
-- [ ] Attendance geofencing
-- [ ] QR code backup attendance
+- [x] Attendance analytics
+- [x] Email notifications
+- [x] Reports generation
+- [x] Attendance geofencing
+- [x] QR code backup attendance
 - [x] Multi-language support
 
 ### Version 2.0 (Planned)
