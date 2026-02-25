@@ -100,7 +100,7 @@ export default function StudentList() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       toast.success("Roster exported successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to export roster");
     } finally {
       setIsExporting(false);
