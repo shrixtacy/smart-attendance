@@ -153,7 +153,7 @@ async def test_student_device_binding_enforcement(client: AsyncClient, db):
         "college_name": "Test College",
         "branch": "CSE",
         "roll": "CS001",
-        "year": 2,
+        "year": "2",
     }
 
     with patch(
@@ -281,7 +281,7 @@ async def test_device_binding_otp_flow(client: AsyncClient, db):
         "college_name": "Test College",
         "branch": "CSE",
         "roll": "CS002",
-        "year": 2,
+        "year": "2",
     }
 
     with patch(
@@ -450,7 +450,7 @@ async def test_student_login_device_cooldown(client: AsyncClient, db):
         "college_name": "Test College",
         "branch": "CSE",
         "roll": "CS003",
-        "year": 2,
+        "year": "2",
     }
 
     with patch(
@@ -472,7 +472,7 @@ async def test_student_login_device_cooldown(client: AsyncClient, db):
             "email": register_payload["email"],
             "password": register_payload["password"],
         },
-        headers={"X-Device-ID": "device-A-12345"},
+        headers={"X-Device-ID": "device-A-12345", "X-Forwarded-For": "127.0.0.6"},
     )
     assert response.status_code == 200
     token_a = response.json()["token"]
@@ -480,7 +480,7 @@ async def test_student_login_device_cooldown(client: AsyncClient, db):
     # 3. Logout
     response = await client.post(
         "/auth/logout",
-        headers={"Authorization": f"Bearer {token_a}"},
+        headers={"Authorization": f"Bearer {token_a}", "X-Forwarded-For": "127.0.0.6"},
     )
     assert response.status_code == 200
 
@@ -491,7 +491,7 @@ async def test_student_login_device_cooldown(client: AsyncClient, db):
             "email": register_payload["email"],
             "password": register_payload["password"],
         },
-        headers={"X-Device-ID": "device-B-67890"},  # Different device
+        headers={"X-Device-ID": "device-B-67890", "X-Forwarded-For": "127.0.0.6"},  # Different device
     )
 
     # Should get cooldown error
