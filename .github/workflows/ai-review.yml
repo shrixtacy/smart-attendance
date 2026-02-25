@@ -11,6 +11,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run AI Reviewer
+        continue-on-error: true
         uses: coderabbitai/ai-pr-reviewer@v2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

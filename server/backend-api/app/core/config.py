@@ -23,17 +23,14 @@ DEFAULT_ORIGINS = [
     "http://127.0.0.1:4173",
 ]
 
-raw_origins = [
-    o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()
-]
+raw_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 # 🚫 HARD FAIL if wildcard is used
 if "*" in raw_origins:
-    raise RuntimeError(
-        "CORS_ORIGINS must not contain '*' when credentials are enabled"
-    )
+    raise RuntimeError("CORS_ORIGINS must not contain '*' when credentials are enabled")
 
 ORIGINS: List[str] = raw_origins or DEFAULT_ORIGINS
+
 
 class Settings(BaseSettings):
     MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")

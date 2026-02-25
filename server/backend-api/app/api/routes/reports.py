@@ -16,7 +16,14 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Table,
+    TableStyle,
+    Paragraph,
+    Spacer,
+    PageBreak,
+)
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 
@@ -591,12 +598,14 @@ async def export_combined_attendance_pdf(
         subjects = await subjects_cursor.to_list(length=None)
 
         if not subjects:
-             # Fallback: check "teacher_id" field
-             subjects_cursor = db.subjects.find({"teacher_id": teacher_id})
-             subjects = await subjects_cursor.to_list(length=None)
+            # Fallback: check "teacher_id" field
+            subjects_cursor = db.subjects.find({"teacher_id": teacher_id})
+            subjects = await subjects_cursor.to_list(length=None)
 
         if not subjects:
-            raise HTTPException(status_code=404, detail="No subjects found for this teacher")
+            raise HTTPException(
+                status_code=404, detail="No subjects found for this teacher"
+            )
 
         # --- Get teacher name ---
         teacher = await db.users.find_one({"_id": ObjectId(teacher_id)})
@@ -648,53 +657,81 @@ async def export_combined_attendance_pdf(
             subj_students = subject.get("students", [])
             verified_students = [s for s in subj_students if s.get("verified", False)]
             count = len(verified_students)
-            
+
             total_attend = 0
             total_classes = 0
-            
+
             if count > 0:
                 for s in verified_students:
                     total_students_set.add(str(s.get("student_id")))
                     att = s.get("attendance", {})
                     p = att.get("present", 0)
                     a = att.get("absent", 0)
-                    total_classes += (p + a)
+                    total_classes += p + a
                     total_attend += p
-                
-                avg_pct = (total_attend / total_classes * 100) if total_classes > 0 else 0
+
+                avg_pct = (
+                    (total_attend / total_classes * 100) if total_classes > 0 else 0
+                )
             else:
                 avg_pct = 0
 
-            summary_data.append([
-                subject.get("name", "Unknown"),
-                subject.get("code", "N/A"),
-                str(count),
-                f"{avg_pct:.1f}%"
-            ])
+            summary_data.append(
+                [
+                    subject.get("name", "Unknown"),
+                    subject.get("code", "N/A"),
+                    str(count),
+                    f"{avg_pct:.1f}%",
+                ]
+            )
 
         # Summary Header
         elements.append(Paragraph("Combined Attendance Report", title_style))
         elements.append(Spacer(1, 10))
-        
-        elements.append(Paragraph(f"<b>Teacher:</b> {html.escape(teacher_name)}", header_style))
-        elements.append(Paragraph(f"<b>School:</b> {html.escape(school_name)}", header_style))
-        elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", header_style))
-        elements.append(Paragraph(f"<b>Total Unique Students:</b> {len(total_students_set)}", header_style))
+
+        elements.append(
+            Paragraph(f"<b>Teacher:</b> {html.escape(teacher_name)}", header_style)
+        )
+        elements.append(
+            Paragraph(f"<b>School:</b> {html.escape(school_name)}", header_style)
+        )
+        elements.append(
+            Paragraph(
+                f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d')}", header_style
+            )
+        )
+        elements.append(
+            Paragraph(
+                f"<b>Total Unique Students:</b> {len(total_students_set)}", header_style
+            )
+        )
         elements.append(Spacer(1, 20))
 
         # Summary Table
-        col_widths = [doc.width * 0.4, doc.width * 0.2, doc.width * 0.2, doc.width * 0.2]
+        col_widths = [
+            doc.width * 0.4,
+            doc.width * 0.2,
+            doc.width * 0.2,
+            doc.width * 0.2,
+        ]
         summary_table = Table(summary_data, colWidths=col_widths, repeatRows=1)
         summary_table.setStyle(
-            TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#e5e7eb")),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9fafb")]), 
-            ])
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                    ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                    ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#e5e7eb")),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [colors.white, colors.HexColor("#f9fafb")],
+                    ),
+                ]
+            )
         )
         elements.append(summary_table)
         elements.append(PageBreak())
@@ -714,7 +751,9 @@ async def export_combined_attendance_pdf(
 
             # Fetch student profiles and users
             if student_user_ids:
-                students_cursor = db.students.find({"userId": {"$in": student_user_ids}})
+                students_cursor = db.students.find(
+                    {"userId": {"$in": student_user_ids}}
+                )
                 users_cursor = db.users.find({"_id": {"$in": student_user_ids}})
 
                 students_map = {str(s["userId"]): s async for s in students_cursor}
@@ -724,7 +763,11 @@ async def export_combined_attendance_pdf(
                 users_map = {}
 
             # --- Header Section for Subject ---
-            elements.append(Paragraph(f"{html.escape(subject.get('name', 'Unknown'))} Report", title_style))
+            elements.append(
+                Paragraph(
+                    f"{html.escape(subject.get('name', 'Unknown'))} Report", title_style
+                )
+            )
             elements.append(Spacer(1, 10))
 
             # Report metadata (2-column layout)
@@ -783,13 +826,11 @@ async def export_combined_attendance_pdf(
                 ]
             ]
 
-            has_valid_students = False
             for s in subject_students:
                 # Only include verified students
                 if not s.get("verified", False):
                     continue
 
-                has_valid_students = True
                 student_id_str = str(s["student_id"])
                 student_profile = students_map.get(student_id_str, {})
                 user = users_map.get(student_id_str, {})
@@ -855,7 +896,13 @@ async def export_combined_attendance_pdf(
                             ("TOPPADDING", (0, 1), (-1, -1), 6),
                             # Grid
                             ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#e5e7eb")),
-                            ("LINEBELOW", (0, 0), (-1, 0), 2, colors.HexColor("#1e40af")),
+                            (
+                                "LINEBELOW",
+                                (0, 0),
+                                (-1, 0),
+                                2,
+                                colors.HexColor("#1e40af"),
+                            ),
                             # Alternating row backgrounds
                             (
                                 "ROWBACKGROUNDS",
@@ -895,9 +942,7 @@ async def export_combined_attendance_pdf(
 
         buffer.seek(0)
 
-        filename = (
-            f"combined_attendance_report_{datetime.now().strftime('%Y%m%d')}.pdf"
-        )
+        filename = f"combined_attendance_report_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         return StreamingResponse(
             buffer,

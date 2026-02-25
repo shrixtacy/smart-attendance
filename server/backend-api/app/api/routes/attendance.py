@@ -118,11 +118,11 @@ async def mark_attendance_qr(
     subject_oid = ObjectId(subject_id)
 
     # Validate date is today
-    from datetime import datetime, UTC
+    from datetime import datetime, timezone
 
     try:
         qr_date = datetime.fromisoformat(payload.date.replace("Z", "+00:00"))
-        today = datetime.now(UTC).date()
+        today = datetime.now(timezone.utc).date()
         qr_day = qr_date.date()
 
         if qr_day != today:
@@ -227,7 +227,7 @@ async def mark_attendance_qr(
     attendance_record = {
         "date": today,
         "status": "Proxy" if is_proxy_suspected else "Present",
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "method": "qr",
     }
 
@@ -264,8 +264,8 @@ async def mark_attendance_qr(
         "student_id": student_oid,
         "subject_id": subject_oid,
         "date": today,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "createdAt": datetime.now(UTC),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "createdAt": datetime.now(timezone.utc),
         "session_id": payload.sessionId,
         "token": payload.token,
         "latitude": payload.latitude,
@@ -625,9 +625,8 @@ async def confirm_attendance(payload: Dict):
     today = date.today().isoformat()
 
     # Mark PRESENT students - increment total AND present
-    present_updated = 0
     if present_oids:
-        result = await db.subjects.update_one(
+        await db.subjects.update_one(
             {"_id": subject_oid},
             {
                 "$inc": {
@@ -643,12 +642,10 @@ async def confirm_attendance(payload: Dict):
                 }
             ],
         )
-        present_updated = result.modified_count
 
     # Mark ABSENT students - increment total AND absent
-    absent_updated = 0
     if absent_oids:
-        result = await db.subjects.update_one(
+        await db.subjects.update_one(
             {"_id": subject_oid},
             {
                 "$inc": {
@@ -664,7 +661,6 @@ async def confirm_attendance(payload: Dict):
                 }
             ],
         )
-        absent_updated = result.modified_count
 
     # Update percentage for all modified students
     # Fetch the subject to get updated student records

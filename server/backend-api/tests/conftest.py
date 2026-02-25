@@ -129,7 +129,7 @@ async def client(db):
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
-        
+
     # Re-enable rate limiting after test
     limiter.enabled = True
 
