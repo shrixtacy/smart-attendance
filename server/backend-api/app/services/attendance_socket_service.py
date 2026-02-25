@@ -3,7 +3,7 @@ from datetime import datetime, date
 from typing import Dict, List, Any
 
 import socketio
-from datetime import datetime, date, UTC
+from datetime import UTC
 from bson import ObjectId
 from pymongo import UpdateOne
 
@@ -30,6 +30,7 @@ active_sessions: Dict[str, List[Dict[str, Any]]] = {}
 # Key: session_id
 # Value: { lat: float, lon: float, subjectIdx: str }
 session_locations: Dict[str, Dict[str, Any]] = {}
+
 
 @sio.event
 async def connect(sid, environ):

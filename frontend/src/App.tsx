@@ -24,11 +24,11 @@ const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const OAuthCallback = lazy(() => import("./pages/OAuthCallback"));
 
 // Student pages
-const StudentDashboard = lazy(() => import("./students/pages/StudentDashboard"));
-const StudentSubjects = lazy(() => import("./students/pages/StudentSubjects"));
-const StudentForecast = lazy(() => import("./students/pages/StudentForecast"));
-const StudentProfile = lazy(() => import("./students/pages/StudentProfile"));
-const MarkWithQR = lazy(() => import("./students/pages/MarkWithQR"));
+import StudentDashboard from "./students/pages/StudentDashboard";
+import StudentSubjects from "./students/pages/StudentSubjects";
+import StudentForecast from "./students/pages/StudentForecast";
+import StudentProfile from "./students/pages/StudentProfile";
+import MarkWithQR from "./students/pages/MarkWithQR";
 
 /**
  * Redirects the user to the appropriate home page based on their role.

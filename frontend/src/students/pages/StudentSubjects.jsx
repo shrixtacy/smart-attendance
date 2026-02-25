@@ -112,15 +112,6 @@ export default function StudentSubjects() {
     sub.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-
-  if (loading) {
-     return (
-        <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
-        </div>
-     );
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
       {/* 2. Sidebar (Desktop) */}
@@ -169,20 +160,23 @@ export default function StudentSubjects() {
             </button>
           </div>
           
-          {error && (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]"></div>
+            </div>
+          ) : error ? (
             <div className="p-4 bg-[var(--danger)]/10 text-[var(--danger)] rounded-lg">
                {t(`subjects.errors.${error}`)}
             </div>
-          )}
-
-          {/* Subjects List */}
-          <div className="space-y-6">
-            {subjects.length === 0 ? (
-               <div className="p-8 text-center text-[var(--text-body)]/80 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)]">
-                  {t('subjects.no_subjects')}
-               </div>
-            ) : (
-                subjects.map((sub) => (
+          ) : (
+            /* Subjects List */
+            <div className="space-y-6">
+              {subjects.length === 0 ? (
+                 <div className="p-8 text-center text-[var(--text-body)]/80 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)]">
+                    {t('subjects.no_subjects')}
+                 </div>
+              ) : (
+                  subjects.map((sub) => (
               <div key={sub.id} className="bg-[var(--bg-card)] rounded-2xl p-6 border border-[var(--border-color)] shadow-sm hover:shadow-md transition-shadow">
                 
                 {/* Card Header */}
@@ -225,7 +219,8 @@ export default function StudentSubjects() {
               </div>
             ))
             )}
-          </div>
+            </div>
+          )}
 
         </div>
       </main>

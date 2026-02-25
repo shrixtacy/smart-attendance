@@ -93,8 +93,8 @@ def create_app() -> FastAPI:
     # CORS MUST be added FIRST so headers are present even on errors
     app.add_middleware(
         CORSMiddleware,
+        allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
         allow_origins=ORIGINS,
-        allow_origin_regex=r"https://.*\.vercel\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -111,8 +111,8 @@ def create_app() -> FastAPI:
         secret_key=os.getenv("SESSION_SECRET_KEY", "temporary-dev-secret-key"),
         session_cookie="session",
         max_age=14 * 24 * 3600,
-        same_site="lax",
-        https_only=False,
+        same_site="none",
+        https_only=True,
     )
 
     # Exception Handlers
