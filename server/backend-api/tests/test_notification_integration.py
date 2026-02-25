@@ -122,7 +122,7 @@ def test_notification_component_exists():
     with open(component_path, "r") as f:
         content = f.read()
         assert "getInAppNotifications" in content
-        assert "markNotificationAsRead" in content
+        assert "deleteNotification" in content
         assert "NotificationDropdown" in content
 
     print("✓ NotificationDropdown component exists test passed")
@@ -138,8 +138,8 @@ def test_notification_api_functions():
     with open(api_path, "r") as f:
         content = f.read()
         assert "getInAppNotifications" in content
-        assert "markNotificationAsRead" in content
-        assert "markAllNotificationsAsRead" in content
+        assert "deleteNotification" in content
+        assert "deleteAllNotifications" in content
 
     print("✓ Notification API functions test passed")
 

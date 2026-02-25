@@ -296,12 +296,39 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to fetch notifications")
 
 
-@router.patch("/in-app/{notification_id}/read")
-async def mark_notification_as_read(
+@router.delete("/in-app/delete-all")
+async def delete_all_notifications(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Delete all notifications for the current user.
+    """
+    from bson import ObjectId
+
+    try:
+        user_oid = ObjectId(current_user["id"])
+
+        result = await db.notifications.delete_many(
+            {"user_id": user_oid}
+        )
+
+        return {
+            "message": f"Deleted {result.deleted_count} notifications",
+            "count": result.deleted_count,
+        }
+    except Exception as e:
+        logger.error(f"Error deleting all notifications: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Failed to delete notifications"
+        )
+
+
+@router.delete("/in-app/{notification_id}")
+async def delete_notification(
     notification_id: str, current_user: dict = Depends(get_current_user)
 ):
     """
-    Mark a single notification as read.
+    Delete a notification.
     """
     from bson import ObjectId
 
@@ -309,43 +336,14 @@ async def mark_notification_as_read(
         notif_oid = ObjectId(notification_id)
         user_oid = ObjectId(current_user["id"])
 
-        result = await db.notifications.update_one(
-            {"_id": notif_oid, "user_id": user_oid},
-            {"$set": {"is_read": True}},
+        result = await db.notifications.delete_one(
+            {"_id": notif_oid, "user_id": user_oid}
         )
 
-        if result.matched_count == 0:
+        if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Notification not found")
 
-        return {"message": "Notification marked as read"}
+        return {"message": "Notification deleted"}
     except Exception as e:
-        logger.error(f"Error updating notification: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to update notification")
-
-
-@router.post("/in-app/mark-all-read")
-async def mark_all_notifications_as_read(
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Mark all notifications as read for the current user.
-    """
-    from bson import ObjectId
-
-    try:
-        user_oid = ObjectId(current_user["id"])
-
-        result = await db.notifications.update_many(
-            {"user_id": user_oid, "is_read": False},
-            {"$set": {"is_read": True}},
-        )
-
-        return {
-            "message": f"Marked {result.modified_count} notifications as read",
-            "count": result.modified_count,
-        }
-    except Exception as e:
-        logger.error(f"Error marking all notifications as read: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail="Failed to mark notifications as read"
-        )
+        logger.error(f"Error deleting notification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete notification")
