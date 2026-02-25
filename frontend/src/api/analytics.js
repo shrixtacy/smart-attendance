@@ -5,6 +5,11 @@ export const fetchSubjectAnalytics = async (subjectId) => {
     return res.data;
 };
 
+export const fetchDashboardStats = async () => {
+    const res = await api.get("/api/analytics/dashboard-stats");
+    return res.data;
+};
+
 export const fetchGlobalStats = async () => {
     const res = await api.get("/api/analytics/global");
     return res.data;

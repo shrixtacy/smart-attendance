@@ -249,7 +249,9 @@
     },
     "stats": {
       "attendance_rate": "आज की उपस्थिति दर",
-      "increase": "+3% पिछले सप्ताह बनाम",
+      "attendance_rate_week": "इस सप्ताह की उपस्थिति दर",
+      "increase": "रुझान ऊपर",
+      "decrease": "रुझान नीचे",
       "absent": "अनुपस्थित",
       "all_classes": "सभी कक्षाओं में",
       "late_arrivals": "देर से आगमन",

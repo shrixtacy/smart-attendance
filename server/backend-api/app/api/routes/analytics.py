@@ -2,7 +2,7 @@
 Analytics API routes for attendance data.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from bson import ObjectId
@@ -55,6 +55,105 @@ async def _verify_teacher_class_access(
 # -------------------------------------------------------------------------
 # ENDPOINTS
 # -------------------------------------------------------------------------
+
+
+@router.get("/dashboard-stats")
+async def get_dashboard_stats(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get aggregated statistics for Today.
+    If today's data is empty, fallback to This Week.
+    """
+    # Verify teacher
+    if current_user["role"] != "teacher":
+        raise HTTPException(
+            status_code=403, detail="Only teachers can access dashboard stats"
+        )
+
+    teacher_oid = ObjectId(current_user["id"])
+    subjects = await _get_teacher_subjects(teacher_oid)
+
+    if not subjects:
+        return {
+            "timeframe": "today",
+            "attendanceRate": 0,
+            "absent": 0,
+            "late": 0,
+            "increase": True,
+        }
+
+    subject_ids = [s["_id"] for s in subjects]
+
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+
+    # 1. Try Fetching Today's Stats
+    pipeline_today = [
+        {"$match": {"subjectId": {"$in": subject_ids}}},
+        {"$project": {"todaydata": f"$daily.{today_str}"}},
+        {"$match": {"todaydata": {"$exists": True, "$ne": None}}},
+        {"$group": {
+            "_id": None,
+            "present": {"$sum": "$todaydata.present"},
+            "absent": {"$sum": "$todaydata.absent"},
+            "late": {"$sum": "$todaydata.late"},
+            "total": {"$sum": "$todaydata.total"},
+        }},
+    ]
+
+    today_result = await db.attendance_daily.aggregate(pipeline_today).to_list(length=1)
+
+    if today_result and today_result[0]["total"] > 0:
+        res = today_result[0]
+        rate = int((res["present"] / res["total"]) * 100)
+        return {
+            "timeframe": "today",
+            "attendanceRate": rate,
+            "absent": res["absent"],
+            "late": res["late"],
+            "increase": True,  # You might want to calculate this defined against yesterday if needed
+        }
+
+    # 2. Fallback to This Week
+    start_of_week = now - timedelta(days=now.weekday())
+    start_of_week_str = start_of_week.strftime("%Y-%m-%d")
+
+    pipeline_week = [
+        {"$match": {"subjectId": {"$in": subject_ids}}},
+        {"$project": {"dailyArray": {"$objectToArray": "$daily"}}},
+        {"$unwind": "$dailyArray"},
+        {"$match": {"dailyArray.k": {"$gte": start_of_week_str, "$lte": today_str}}},
+        {"$group": {
+            "_id": None,
+            "present": {"$sum": "$dailyArray.v.present"},
+            "absent": {"$sum": "$dailyArray.v.absent"},
+            "late": {"$sum": "$dailyArray.v.late"},
+            "total": {"$sum": "$dailyArray.v.total"},
+        }},
+    ]
+
+    week_result = await db.attendance_daily.aggregate(pipeline_week).to_list(length=1)
+
+    if week_result and week_result[0]["total"] > 0:
+        res = week_result[0]
+        rate = int((res["present"] / res["total"]) * 100)
+        return {
+            "timeframe": "week",
+            "attendanceRate": rate,
+            "absent": res["absent"],
+            "late": res["late"],
+            "increase": True,
+        }
+
+    # No data for the week either
+    return {
+        "timeframe": "today",
+        "attendanceRate": 0,
+        "absent": 0,
+        "late": 0,
+        "increase": True,
+    }
 
 
 @router.get("/subject/{subject_id}")

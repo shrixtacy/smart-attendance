@@ -12,6 +12,7 @@ import {
   AlertTriangle
 } from "lucide-react"; 
 import { getTodaySchedule } from "../api/schedule";
+import { fetchDashboardStats } from "../api/analytics";
 import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
 import { exportCombinedReport } from "../api/teacher";
 import { toast } from "react-hot-toast";
@@ -26,8 +27,26 @@ export default function Dashboard() {
   const [mlStatus, setMlStatus] = useState("checking"); // checking, ready, waking-up
   const [todayClasses, setTodayClasses] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(true);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(true);
   const [downloadingReport, setDownloadingReport] = useState(false);
   const [tick, setTick] = useState(0); // Periodic tick for real-time status updates
+
+  // Fetch dashboard stats
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const stats = await fetchDashboardStats();
+        setDashboardStats(stats);
+      } catch (error) {
+        console.error("Failed to load dashboard stats", error);
+        // Fallback or leave as null (will show 0 or -)
+      } finally {
+        setLoadingStats(false);
+      }
+    };
+    loadStats();
+  }, []);
 
   useEffect(() => {
     const checkMlService = async () => {
@@ -310,10 +329,22 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 xs:grid-cols-3 gap-3 sm:gap-4">
               {/* Stat 1 */}
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5 relative overflow-hidden">
-                <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.attendance_rate')}</p>
+                <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">
+                  {dashboardStats?.timeframe === 'week' ? t('dashboard.stats.attendance_rate_week') : t('dashboard.stats.attendance_rate')}
+                </p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">94%</h3>
-                  <span className="text-xs bg-[var(--text-on-primary)]/15 px-2 py-1 rounded text-[var(--text-on-primary)]/90">{t('dashboard.stats.increase')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.attendanceRate ?? 0}%</h3>
+                      {dashboardStats?.increase !== undefined && (
+                        <span className="text-xs bg-[var(--text-on-primary)]/15 px-2 py-1 rounded text-[var(--text-on-primary)]/90">
+                          {dashboardStats.increase ? t('dashboard.stats.increase') : t('dashboard.stats.decrease')}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -321,8 +352,14 @@ export default function Dashboard() {
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5">
                 <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.absent')}</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">7</h3>
-                  <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.all_classes')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.absent ?? 0}</h3>
+                      <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.all_classes')}</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -330,8 +367,14 @@ export default function Dashboard() {
               <div className="bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-xl sm:rounded-2xl p-4 sm:p-5">
                 <p className="text-[var(--text-on-primary)]/80 text-sm font-medium mb-1">{t('dashboard.stats.late_arrivals')}</p>
                 <div className="flex items-end justify-between">
-                  <h3 className="text-3xl font-bold">3</h3>
-                  <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.first_period')}</span>
+                  {loadingStats ? (
+                     <Loader2 className="animate-spin" size={24} />
+                  ) : (
+                    <>
+                      <h3 className="text-3xl font-bold">{dashboardStats?.late ?? 0}</h3>
+                      <span className="text-xs text-[var(--text-on-primary)]/80">{t('dashboard.stats.first_period')}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
