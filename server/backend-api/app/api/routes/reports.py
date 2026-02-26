@@ -217,6 +217,17 @@ def _add_page_footer(canvas, doc, school_name):
     canvas.drawCentredString(doc.pagesize[0] / 2, 30, timestamp)
 
     canvas.restoreState()
+    
+def _resolve_student_roll(student_profile: dict) -> str:
+    roll = student_profile.get("roll")
+
+    if roll in (None, ""):
+        roll = student_profile.get("roll_number")
+
+    if roll in (None, ""):
+        return "N/A"
+
+    return str(roll)
 
 
 @router.get("/export/pdf")
@@ -373,7 +384,7 @@ async def export_attendance_pdf(
 
             # Get student info
             name = html.escape(user.get("name", "Unknown"))
-            roll_no = html.escape(str(student_profile.get("roll_number", "N/A")))
+            roll_no = html.escape(_resolve_student_roll(student_profile))
 
             table_data.append(
                 [
@@ -545,7 +556,7 @@ async def export_attendance_csv(
 
             # Get student info
             name = user.get("name", "Unknown")
-            roll_no = student_profile.get("roll_number", "N/A")
+            roll_no = _resolve_student_roll(student_profile)
 
             writer.writerow(
                 [
@@ -846,7 +857,7 @@ async def export_combined_attendance_pdf(
 
                 # Get student info
                 name = html.escape(user.get("name", "Unknown"))
-                roll_no = html.escape(str(student_profile.get("roll_number", "N/A")))
+                roll_no = html.escape(_resolve_student_roll(student_profile))
 
                 table_data.append(
                     [
