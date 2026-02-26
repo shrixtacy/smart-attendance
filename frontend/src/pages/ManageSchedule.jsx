@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { getSettings, updateSettings } from "../api/schedule";
 import { fetchMySubjects } from "../api/teacher";
+import { getHolidays } from "../api/holidays";
+import { getExams } from "../api/exams";
 import Spinner from "../components/Spinner";
 import HolidaysModal from "../components/HolidaysModal";
 import ExamDaysModal from "../components/ExamDaysModal";
@@ -41,6 +43,8 @@ export default function ManageSchedule() {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [holidaysModalOpen, setHolidaysModalOpen] = useState(false);
   const [examModalOpen, setExamModalOpen] = useState(false);
+  const [holidays, setHolidays] = useState([]);
+  const [exams, setExams] = useState([]);
   const yearScrollRef = useRef(null);
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -98,6 +102,32 @@ export default function ManageSchedule() {
   const formatMonthYear = (date) => {
     return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   };
+
+  const isSunday = (day, month, year) => {
+    const date = new Date(year, month, day);
+    return date.getDay() === 0;
+  };
+
+  const isHoliday = (day, month, year) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return holidays.some(h => h.date === dateStr);
+  };
+
+  const isExamDay = (day, month, year) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return exams.some(e => e.date === dateStr);
+  };
+
+  const getDateLabel = (day, month, year) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const holiday = holidays.find(h => h.date === dateStr);
+    const exam = exams.find(e => e.date === dateStr);
+    
+    if (holiday) return holiday.name;
+    if (exam) return exam.name;
+    if (isSunday(day, month, year)) return t('manage_schedule.sunday', 'Sunday');
+    return '';
+  };
   useEffect(() => {
     const fetchSchedule = async () => {
       try {
@@ -105,7 +135,12 @@ export default function ManageSchedule() {
 
         const data = await getSettings();
         const subjectsData = await fetchMySubjects();
+        const holidaysData = await getHolidays();
+        const examsData = await getExams();
+        
         setSubjects(subjectsData);
+        setHolidays(holidaysData.holidays || []);
+        setExams(examsData.exams || []);
 
         const scheduleData = data.schedule || {
           timetable: [],
@@ -705,14 +740,51 @@ export default function ManageSchedule() {
                   if(!day) return <div key={idx} className="h-8 w-8"/>;
                   const today = new Date();
                   const isToday = day === today.getDate() && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear();
+                  const year = currentDate.getFullYear();
+                  const month = currentDate.getMonth();
+                  const sunday = isSunday(day, month, year);
+                  const holiday = isHoliday(day, month, year);
+                  const examDay = isExamDay(day, month, year);
+                  const label = getDateLabel(day, month, year);
+                  
+                  let bgClass = "text-[var(--text-main)] hover:bg-[var(--bg-secondary)]";
+                  if (isToday) {
+                    bgClass = "bg-[var(--primary)] text-[var(--text-on-primary)] font-bold shadow-md";
+                  } else if (holiday || sunday) {
+                    bgClass = "bg-red-500 text-white font-semibold";
+                  } else if (examDay) {
+                    bgClass = "bg-yellow-500 text-black font-semibold";
+                  }
+                  
                   return (
                     <div key={idx} className="flex justify-center">
-                      <span className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition cursor-pointer text-xs sm:text-sm ${isToday ? "bg-[var(--primary)] text-[var(--text-on-primary)] font-bold shadow-md" : "text-[var(--text-main)] hover:bg-[var(--bg-secondary)]"}`}>
+                      <span 
+                        className={`h-7 w-7 sm:h-8 sm:w-8 flex items-center justify-center rounded-lg transition cursor-pointer text-xs sm:text-sm ${bgClass}`}
+                        title={label}
+                      >
                         {day}
                       </span>
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-[var(--border-color)] space-y-2">
+                <p className="text-xs font-semibold text-[var(--text-body)] uppercase">{t('manage_schedule.legend', 'Legend')}</p>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-4 w-4 rounded bg-red-500"></span>
+                    <span className="text-[var(--text-body)]">{t('manage_schedule.holiday_sunday', 'Holiday/Sunday')}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-4 w-4 rounded bg-yellow-500"></span>
+                    <span className="text-[var(--text-body)]">{t('manage_schedule.exam_day', 'Exam Day')}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-4 w-4 rounded bg-[var(--primary)]"></span>
+                    <span className="text-[var(--text-body)]">{t('manage_schedule.today', 'Today')}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -769,12 +841,18 @@ export default function ManageSchedule() {
         {/* Holidays Modal — rendered at page root level, outside all cards */}
         <HolidaysModal
           isOpen={holidaysModalOpen}
-          onClose={() => setHolidaysModalOpen(false)}
+          onClose={() => {
+            setHolidaysModalOpen(false);
+            getHolidays().then(data => setHolidays(data.holidays || [])).catch(console.error);
+          }}
         />
 
         <ExamDaysModal
           isOpen={examModalOpen}
-          onClose={() => setExamModalOpen(false)}
+          onClose={() => {
+            setExamModalOpen(false);
+            getExams().then(data => setExams(data.exams || [])).catch(console.error);
+          }}
         />
 
         {/* Templates Modal */}
