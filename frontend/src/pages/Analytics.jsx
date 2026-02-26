@@ -4,7 +4,8 @@ import {
   FileText, 
   ArrowUpRight, 
   Clock, 
-  ChevronDown
+  ChevronDown,
+  Loader2
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -22,6 +23,9 @@ import { useTranslation } from "react-i18next";
 import { fetchSubjectAnalytics, fetchGlobalStats, fetchTopPerformers, fetchClassRisk, fetchAttendanceTrend } from "../api/analytics";
 import { fetchMySubjects } from "../api/teacher";
 import Spinner from "../components/Spinner";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import toast from "react-hot-toast";
 
 const GLOBAL_STATS = {
   attendance: 0,
@@ -61,6 +65,8 @@ export default function Analytics() {
   const [classBreakdown, setClassBreakdown] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const analyticsRef = useRef(null);
 
   // Handle outside click to close dropdown
   useEffect(() => {
@@ -225,6 +231,114 @@ export default function Analytics() {
     return () => { isMounted = false; };
   }, [selectedSubject, isGlobal, selectedPeriod]);
 
+  const handleExportAnalytics = () => {
+    setExporting(true);
+    const toastId = toast.loading(t('common.exporting', 'Exporting PDF...'));
+
+    try {
+      const doc = new jsPDF();
+      const subjectName = subjects.find(s => s.id === selectedSubject)?.name || 'All Subjects';
+      
+      // -- Title Section --
+      doc.setFontSize(20);
+      doc.setTextColor(40, 40, 40);
+      doc.text(t('analytics.report_title', 'Attendance Report'), 14, 22);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`${subjectName} - ${selectedPeriod}`, 14, 32);
+      doc.text(`${t('common.generated', 'Generated')}: ${new Date().toLocaleString()}`, 14, 40);
+
+      let finalY = 50;
+
+      // -- Key Stats --
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text(t('analytics.stats.overview', 'Overview'), 14, finalY);
+      
+      autoTable(doc, {
+        startY: finalY + 5,
+        head: [[t('analytics.metric', 'Metric'), t('analytics.value', 'Value')]],
+        body: [
+          [t('analytics.stats.attendance', 'Attendance Rate'), `${stats.attendance}%`],
+          [t('analytics.stats.avg_late', 'Average Late Count'), stats.avgLate],
+          [t('analytics.stats.risk_count', 'At Risk Count'), stats.riskCount],
+          [t('analytics.stats.avg_late_time', 'Avg Late Time'), stats.lateTime]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [41, 128, 185] },
+      });
+      
+      finalY = doc.lastAutoTable.finalY + 15;
+
+      // -- Best Performing --
+      if (bestPerforming.length > 0) {
+        doc.text(t('analytics.lists.best', 'Best Performing'), 14, finalY);
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [[t('common.rank', 'Rank'), t('common.name', 'Name'), t('common.score', 'Score')]],
+          body: bestPerforming.map((item, i) => [i + 1, item.name, `${item.score || 0}%`]),
+          theme: 'striped',
+          headStyles: { fillColor: [46, 204, 113] }
+        });
+        finalY = doc.lastAutoTable.finalY + 15;
+      }
+
+      // -- Needing Support --
+      if (needingSupport.length > 0) {
+        // Check if we need a new page
+        if (finalY > 250) {
+          doc.addPage();
+          finalY = 20;
+        }
+        
+        doc.text(t('analytics.lists.needs_support', 'Needing Support'), 14, finalY);
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [[t('common.rank', 'Rank'), t('common.name', 'Name'), t('common.score', 'Score')]],
+          body: needingSupport.map((item, i) => [i + 1, item.name, `${item.score || 0}%`]),
+          theme: 'striped',
+          headStyles: { fillColor: [231, 76, 60] }
+        });
+        finalY = doc.lastAutoTable.finalY + 15;
+      }
+
+      // -- Class Breakdown (Global Only) --
+      if (isGlobal && classBreakdown.length > 0) {
+         if (finalY > 250) {
+          doc.addPage();
+          finalY = 20;
+        }
+
+        doc.text(t('analytics.breakdown.title', 'Class Breakdown'), 14, finalY);
+        autoTable(doc, {
+          startY: finalY + 5,
+          head: [[t('common.class', 'Class'), t('common.students', 'Total Students'), t('common.present', 'Present %'), t('common.late', 'Late %'), t('common.absent', 'Absent %')]],
+          body: classBreakdown.map(item => [
+            item.class, 
+            item.students, 
+            `${item.present}%`, 
+            `${item.late}%`, 
+            `${item.absent}%`
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor: [52, 73, 94] }
+        });
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const safeSubjectName = subjectName.replace(/[^a-z0-9]/gi, '_');
+      doc.save(`analytics_${safeSubjectName}_${dateStr}.pdf`);
+      
+      toast.success(t('common.export_success', 'Export successful!'), { id: toastId });
+    } catch (error) {
+       console.error("Export failed:", error);
+      toast.error(t('common.export_failed', 'Export failed'), { id: toastId });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)]">
@@ -235,9 +349,12 @@ export default function Analytics() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+      <div 
+        ref={analyticsRef} 
+        className="max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500 will-change-transform"
+      >
         {/* --- HEADER --- */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4" data-html2canvas-ignore="true">
           <div>
             <h2 className="text-2xl font-bold text-[var(--text-main)]">{t('analytics.title')}</h2>
             <p className="text-[var(--text-body)]">{t('analytics.subtitle')}</p>
@@ -257,10 +374,14 @@ export default function Analytics() {
               ))}
             </select>
 
-            <div className="flex gap-2 sm:gap-3">
-              <button className="flex-1 sm:flex-none px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center justify-center gap-2 shadow-sm transition cursor-pointer text-sm sm:text-base">
-                <Download size={18} />
-                <span className="hidden xs:inline">{t('analytics.export')}</span>
+            <div className="flex gap-2 sm:gap-3" data-html2canvas-ignore="true">
+              <button 
+                onClick={handleExportAnalytics}
+                disabled={exporting}
+                className="flex-1 sm:flex-none px-4 py-2 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--primary-hover)] font-medium flex items-center justify-center gap-2 shadow-sm transition cursor-pointer text-sm sm:text-base disabled:opacity-50 disabled:cursor-wait"
+              >
+                {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                <span className="hidden xs:inline">{exporting ? t('common.exporting', 'Exporting...') : t('analytics.export')}</span>
               </button>
               <button className="flex-1 sm:flex-none px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg hover:bg-[var(--action-info-hover)] font-medium flex items-center justify-center gap-2 shadow-sm transition cursor-pointer text-sm sm:text-base">
                 <FileText size={18} />
