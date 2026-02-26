@@ -23,7 +23,7 @@ export const exportAttendanceCSV = async (subjectId, startDate, endDate) => {
       start_date: startDate ? startDate.toISOString().split('T')[0] : null,
       end_date: endDate ? endDate.toISOString().split('T')[0] : null
     },
-    responseType: 'blob' // Important for handling binary data
+    responseType: 'blob'
   });
   return res.data;
 };
@@ -39,3 +39,14 @@ export const exportCombinedReport = async (startDate, endDate) => {
   return res.data;
 };
 
+export const exportStudentRoster = async (subjectId = null) => {
+  const params = new URLSearchParams();
+  if (subjectId) {
+    params.append("subject_id", subjectId);
+  }
+  
+  const res = await api.get(`/students/export/roster/pdf?${params}`, {
+    responseType: 'blob'
+  });
+  return res.data;
+};

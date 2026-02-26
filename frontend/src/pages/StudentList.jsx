@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { fetchMySubjects, fetchSubjectStudents } from "../api/teacher";
+import { toast } from "react-hot-toast";
+import { fetchMySubjects, fetchSubjectStudents, exportStudentRoster } from "../api/teacher";
 
 export default function StudentList() {
   const { t } = useTranslation();
@@ -18,7 +19,8 @@ export default function StudentList() {
   const [students, setStudents] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
-  const [sortOrder, setSortOrder] = useState("desc"); // "asc" or "desc"
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [isExporting, setIsExporting] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -80,9 +82,28 @@ export default function StudentList() {
     return sortOrder === "desc" ? percentageB - percentageA : percentageA - percentageB;
   });
 
-  // Toggle sort order
   const handleSortToggle = () => {
     setSortOrder(prev => prev === "desc" ? "asc" : "desc");
+  };
+
+  const handleExportRoster = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await exportStudentRoster(selectedSubject);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `student_roster_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Roster exported successfully");
+    } catch {
+      toast.error("Failed to export roster");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
 
@@ -130,9 +151,12 @@ export default function StudentList() {
           <p className="text-[var(--text-body)]">{t('students.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium flex items-center gap-2 transition cursor-pointer">
+          <button 
+            onClick={handleExportRoster}
+            disabled={isExporting}
+            className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium flex items-center gap-2 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
             <Download size={18} />
-            {t('students.export_list')}
+            {isExporting ? t('common.loading', 'Loading...') : t('students.export_list')}
           </button>
           <button
            onClick={() => navigate('/add-students')}

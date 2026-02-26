@@ -381,3 +381,337 @@ async def remove_subject(
     )
 
     return {"message": "Subject removed successfully"}
+
+@router.get("/export/roster/pdf")
+async def export_student_roster_pdf(
+    subject_id: str = None,
+    current_teacher: dict = Depends(get_current_user),
+):
+    import html
+    import io
+    from datetime import datetime
+    from fastapi import Query
+    from fastapi.responses import StreamingResponse
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Table,
+        TableStyle,
+        Paragraph,
+        Spacer,
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    import re
+
+    if current_teacher.get("role") != "teacher":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    teacher_id = ObjectId(current_teacher["id"])
+
+    def _safe_filename(name: str) -> str:
+        sanitized = re.sub(r"[^\w\-]", "_", name)
+        sanitized = re.sub(r"_+", "_", sanitized).strip("_")
+        return sanitized[:100] or "roster"
+
+    def _add_page_footer(canvas, doc, school_name):
+        canvas.saveState()
+        canvas.setFont("Helvetica", 9)
+        canvas.setFillColor(colors.gray)
+        page_num = canvas.getPageNumber()
+        canvas.drawRightString(doc.pagesize[0] - 30, 30, f"Page {page_num}")
+        canvas.drawString(30, 30, f"{school_name} - Confidential")
+        canvas.setFont("Helvetica", 7)
+        timestamp = f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        canvas.drawCentredString(doc.pagesize[0] / 2, 30, timestamp)
+        canvas.restoreState()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=50,
+        bottomMargin=50,
+    )
+    elements = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "CustomTitle",
+        parent=styles["Heading1"],
+        fontSize=20,
+        textColor=colors.HexColor("#1e40af"),
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        fontName="Helvetica-Bold",
+    )
+
+    header_style = ParagraphStyle(
+        "HeaderStyle",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#374151"),
+        spaceAfter=6,
+        fontName="Helvetica",
+    )
+
+    school_name = "Smart Attendance System"
+    elements.append(Paragraph(html.escape(school_name), title_style))
+    elements.append(Spacer(1, 10))
+
+    teacher = await db.users.find_one({"_id": teacher_id})
+    teacher_name = teacher.get("name", "Unknown Teacher") if teacher else "Unknown Teacher"
+
+    if subject_id:
+        try:
+            subject_oid = ObjectId(subject_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid subject ID")
+
+        subject = await db.subjects.find_one({"_id": subject_oid})
+        if not subject:
+            subject = await db.classes.find_one({"_id": subject_oid})
+        if not subject:
+            raise HTTPException(status_code=404, detail="Subject not found")
+
+        professor_ids = [str(pid) for pid in subject.get("professor_ids", [])]
+        subject_teacher = str(subject.get("teacher_id", ""))
+        if str(teacher_id) not in professor_ids and str(teacher_id) != subject_teacher:
+            raise HTTPException(status_code=403, detail="Access denied for this subject")
+
+        subject_students = [s for s in subject.get("students", []) if s.get("verified", False)]
+        student_user_ids = [s["student_id"] for s in subject_students]
+
+        students_cursor = db.students.find({"userId": {"$in": student_user_ids}})
+        users_cursor = db.users.find({"_id": {"$in": student_user_ids}})
+
+        students_map = {str(s["userId"]): s async for s in students_cursor}
+        users_map = {str(u["_id"]): u async for u in users_cursor}
+
+        metadata_data = [
+            [
+                Paragraph(f"<b>Teacher:</b> {html.escape(teacher_name)}", header_style),
+                Paragraph(f"<b>Subject:</b> {html.escape(subject.get('name', 'Unknown'))}", header_style),
+            ],
+            [
+                Paragraph(f"<b>Subject Code:</b> {html.escape(subject.get('code', 'N/A'))}", header_style),
+                Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", header_style),
+            ],
+            [
+                Paragraph(f"<b>Total Students:</b> {len(subject_students)}", header_style),
+                Paragraph("", header_style),
+            ],
+        ]
+
+        metadata_table = Table(metadata_data, colWidths=[doc.width / 2.0] * 2)
+        metadata_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(metadata_table)
+        elements.append(Spacer(1, 20))
+
+        table_data = [["Name", "Roll Number", "Academic Year"]]
+
+        for s in subject_students:
+            student_id_str = str(s["student_id"])
+            student_profile = students_map.get(student_id_str, {})
+            user = users_map.get(student_id_str, {})
+
+            name = html.escape(user.get("name", "Unknown"))
+            roll_no = html.escape(str(student_profile.get("roll_number", "N/A")))
+            year = html.escape(str(student_profile.get("year", "N/A")))
+
+            table_data.append([name, roll_no, year])
+
+        if len(table_data) > 1:
+            col_widths = [doc.width * 0.50, doc.width * 0.25, doc.width * 0.25]
+            roster_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            roster_table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, 0), 11),
+                        ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                        ("TOPPADDING", (0, 0), (-1, 0), 10),
+                        ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                        ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+                        ("ALIGN", (0, 1), (-1, -1), "CENTER"),
+                        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                        ("FONTSIZE", (0, 1), (-1, -1), 10),
+                        ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+                        ("TOPPADDING", (0, 1), (-1, -1), 6),
+                        ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#e5e7eb")),
+                        ("LINEBELOW", (0, 0), (-1, 0), 2, colors.HexColor("#1e40af")),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9fafb")]),
+                        ("ALIGN", (0, 1), (0, -1), "LEFT"),
+                    ]
+                )
+            )
+            elements.append(roster_table)
+        else:
+            no_data_style = ParagraphStyle(
+                "NoData",
+                parent=styles["Normal"],
+                fontSize=12,
+                alignment=TA_CENTER,
+                textColor=colors.gray,
+                spaceBefore=40,
+            )
+            elements.append(Paragraph("No verified students found for this subject.", no_data_style))
+
+        doc.build(
+            elements,
+            onFirstPage=lambda c, d: _add_page_footer(c, d, school_name),
+            onLaterPages=lambda c, d: _add_page_footer(c, d, school_name),
+        )
+
+        buffer.seek(0)
+        safe_name = _safe_filename(subject.get("name", "subject"))
+        filename = f"student_roster_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    else:
+        subjects_cursor = db.subjects.find({"professor_ids": teacher_id})
+        subjects = await subjects_cursor.to_list(length=None)
+
+        if not subjects:
+            subjects_cursor = db.classes.find({"teacher_id": teacher_id})
+            subjects = await subjects_cursor.to_list(length=None)
+
+        if not subjects:
+            raise HTTPException(status_code=404, detail="No subjects found")
+
+        metadata_data = [
+            [
+                Paragraph(f"<b>Teacher:</b> {html.escape(teacher_name)}", header_style),
+                Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", header_style),
+            ],
+            [
+                Paragraph(f"<b>Total Subjects:</b> {len(subjects)}", header_style),
+                Paragraph("", header_style),
+            ],
+        ]
+
+        metadata_table = Table(metadata_data, colWidths=[doc.width / 2.0] * 2)
+        metadata_table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ]
+            )
+        )
+        elements.append(metadata_table)
+        elements.append(Spacer(1, 20))
+
+        for subject in subjects:
+            subject_name = subject.get("name", "Unknown Subject")
+            subject_code = subject.get("code", "N/A")
+
+            subject_title_style = ParagraphStyle(
+                "SubjectTitle",
+                parent=styles["Heading2"],
+                fontSize=14,
+                textColor=colors.HexColor("#1e40af"),
+                spaceAfter=10,
+                fontName="Helvetica-Bold",
+            )
+            elements.append(Paragraph(f"{html.escape(subject_name)} ({html.escape(subject_code)})", subject_title_style))
+
+            subject_students = [s for s in subject.get("students", []) if s.get("verified", False)]
+            student_user_ids = [s["student_id"] for s in subject_students]
+
+            students_cursor = db.students.find({"userId": {"$in": student_user_ids}})
+            users_cursor = db.users.find({"_id": {"$in": student_user_ids}})
+
+            students_map = {str(s["userId"]): s async for s in students_cursor}
+            users_map = {str(u["_id"]): u async for u in users_cursor}
+
+            table_data = [["Name", "Roll Number", "Academic Year"]]
+
+            for s in subject_students:
+                student_id_str = str(s["student_id"])
+                student_profile = students_map.get(student_id_str, {})
+                user = users_map.get(student_id_str, {})
+
+                name = html.escape(user.get("name", "Unknown"))
+                roll_no = html.escape(str(student_profile.get("roll_number", "N/A")))
+                year = html.escape(str(student_profile.get("year", "N/A")))
+
+                table_data.append([name, roll_no, year])
+
+            if len(table_data) > 1:
+                col_widths = [doc.width * 0.50, doc.width * 0.25, doc.width * 0.25]
+                roster_table = Table(table_data, colWidths=col_widths, repeatRows=1)
+                roster_table.setStyle(
+                    TableStyle(
+                        [
+                            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1e40af")),
+                            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                            ("FONTSIZE", (0, 0), (-1, 0), 11),
+                            ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                            ("TOPPADDING", (0, 0), (-1, 0), 10),
+                            ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                            ("TEXTCOLOR", (0, 1), (-1, -1), colors.black),
+                            ("ALIGN", (0, 1), (-1, -1), "CENTER"),
+                            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                            ("FONTSIZE", (0, 1), (-1, -1), 10),
+                            ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+                            ("TOPPADDING", (0, 1), (-1, -1), 6),
+                            ("GRID", (0, 0), (-1, -1), 1, colors.HexColor("#e5e7eb")),
+                            ("LINEBELOW", (0, 0), (-1, 0), 2, colors.HexColor("#1e40af")),
+                            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f9fafb")]),
+                            ("ALIGN", (0, 1), (0, -1), "LEFT"),
+                        ]
+                    )
+                )
+                elements.append(roster_table)
+            else:
+                no_data_style = ParagraphStyle(
+                    "NoData",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    alignment=TA_CENTER,
+                    textColor=colors.gray,
+                    spaceBefore=10,
+                    spaceAfter=10,
+                )
+                elements.append(Paragraph("No verified students in this subject.", no_data_style))
+
+            elements.append(Spacer(1, 20))
+
+        doc.build(
+            elements,
+            onFirstPage=lambda c, d: _add_page_footer(c, d, school_name),
+            onLaterPages=lambda c, d: _add_page_footer(c, d, school_name),
+        )
+
+        buffer.seek(0)
+        filename = f"student_roster_all_subjects_{datetime.now().strftime('%Y%m%d')}.pdf"
+
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
