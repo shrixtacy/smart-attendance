@@ -21,6 +21,7 @@ import { getSettings, updateSettings } from "../api/schedule";
 import { fetchMySubjects } from "../api/teacher";
 import Spinner from "../components/Spinner";
 import HolidaysModal from "../components/HolidaysModal";
+import ExamDaysModal from "../components/ExamDaysModal";
 
 export default function ManageSchedule() {
   const { t } = useTranslation();
@@ -39,6 +40,7 @@ export default function ManageSchedule() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [holidaysModalOpen, setHolidaysModalOpen] = useState(false);
+  const [examModalOpen, setExamModalOpen] = useState(false);
   const yearScrollRef = useRef(null);
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -731,7 +733,10 @@ export default function ManageSchedule() {
             </div>
 
             {/* Exam Days Card — SIBLING of holidays card */}
-            <div className="bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border-color)] flex items-center justify-between cursor-pointer hover:bg-[var(--bg-secondary)] transition">
+            <div
+              onClick={() => setExamModalOpen(true)}
+              className="bg-[var(--bg-card)] p-4 rounded-xl border border-[var(--border-color)] flex items-center justify-between cursor-pointer hover:bg-[var(--bg-secondary)] transition"
+            >
               <div>
                 <h4 className="font-bold text-[var(--text-main)] text-sm">
                   {t('manage_schedule.exam_days', "Exam days")}
@@ -765,6 +770,11 @@ export default function ManageSchedule() {
         <HolidaysModal
           isOpen={holidaysModalOpen}
           onClose={() => setHolidaysModalOpen(false)}
+        />
+
+        <ExamDaysModal
+          isOpen={examModalOpen}
+          onClose={() => setExamModalOpen(false)}
         />
 
         {/* Templates Modal */}
