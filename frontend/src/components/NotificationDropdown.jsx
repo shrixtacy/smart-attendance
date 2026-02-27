@@ -20,6 +20,9 @@ export default function NotificationDropdown() {
 
   // Fetch notifications
   const fetchNotifications = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
     try {
       if (isFirstLoad.current) setLoading(true);
       
