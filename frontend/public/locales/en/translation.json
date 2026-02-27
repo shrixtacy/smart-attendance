@@ -368,7 +368,8 @@
     },
     "trend": {
       "no_change": "No change",
-      "vs_last_month": "vs last month"
+      "vs_last_month": "vs last month",
+      "stable": "Stable"
     },
     "no_students_found": "No students found",
     "no_match": "No students match \"{{query}}\"",

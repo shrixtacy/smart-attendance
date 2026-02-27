@@ -337,7 +337,8 @@
     },
     "trend": {
       "no_change": "कोई बदलाव नहीं",
-      "vs_last_month": "पिछले महीने की तुलना में"
+      "vs_last_month": "पिछले महीने की तुलना में",
+      "stable": "स्थिर"
     }
   },
   "manage_schedule": {
