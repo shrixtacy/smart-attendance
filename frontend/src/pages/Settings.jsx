@@ -88,8 +88,8 @@ export default function Settings() {
 
   // Notifications
   const [notifications, setNotifications] = useState({
-    push: true,
-    inApp: true,
+    push: false,
+    inApp: false,
     sound: false,
   });
 
@@ -246,10 +246,15 @@ export default function Settings() {
 
         setTheme(data?.theme ?? data?.settings?.theme ?? "Light");
 
+        // Force defaults to FALSE unless explicitly set to TRUE in DB *AND* browser permission allows
+        const dbPush = data?.settings?.notifications?.push ?? false;
+        const dbInApp = data?.settings?.notifications?.inApp ?? false;
+        const dbSound = data?.settings?.notifications?.sound ?? false;
+
         setNotifications({
-          push: data?.settings?.notifications?.push ?? true,
-          inApp: data?.settings?.notifications?.inApp ?? true,
-          sound: data?.settings?.notifications?.sound ?? false,
+          push: dbPush,
+          inApp: dbInApp,
+          sound: dbSound,
         });
 
         // Sync with browser permission state (System-level override)
