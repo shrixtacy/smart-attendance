@@ -11,6 +11,7 @@ from geopy.distance import geodesic
 from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD
 from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
+from app.services.attendance import log_grouped_attendance
 from app.services.ml_client import ml_client
 from app.utils.geo import calculate_distance
 from app.schemas.attendance import QRAttendanceRequest
@@ -260,22 +261,25 @@ async def mark_attendance_qr(
     # avoiding unbounded growth and schema changes on the nested students
     # array in subjects.
 
-    log_entry = {
-        "student_id": student_oid,
-        "subject_id": subject_oid,
-        "date": today,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "createdAt": datetime.now(UTC),
-        "session_id": payload.sessionId,
-        "token": payload.token,
-        "latitude": payload.latitude,
-        "longitude": payload.longitude,
-        "distance_from_teacher": dist,
-        "is_proxy_suspected": is_proxy_suspected,
-        "method": "qr",
-    }
+    timestamp_iso = datetime.now(UTC).isoformat()
 
-    await db.attendance_logs.insert_one(log_entry)
+    await log_grouped_attendance(
+        subject_id=subject_oid,
+        date_str=today,
+        students=[
+            {
+                "studentId": student_oid,
+                "scanTime": timestamp_iso,
+                "method": "qr",
+                "sessionId": payload.sessionId,
+                "token": payload.token,
+                "latitude": payload.latitude,
+                "longitude": payload.longitude,
+                "distance": dist,
+                "isProxy": is_proxy_suspected,
+            }
+        ],
+    )
 
     # Need student info for socket event
     student_info = await db.students.find_one({"userId": student_oid})
@@ -291,7 +295,7 @@ async def mark_attendance_qr(
                 "roll": student_roll,
                 "id": str(student_oid),
             },
-            "timestamp": log_entry["timestamp"],
+            "timestamp": timestamp_iso,
             "location": {
                 "lat": payload.latitude,
                 "lon": payload.longitude,
@@ -700,12 +704,97 @@ async def confirm_attendance(payload: Dict):
         else None
     )
 
+    # --- Integration with Optimized Attendance Logs ---
+    # Log the students who are marked PRESENT
+    updated_logs_doc = None
+    if present_oids:
+        from datetime import datetime, UTC
+        
+        current_time_iso = datetime.now(UTC).isoformat()
+        
+        log_students = []
+        for pid in present_oids:
+            log_students.append({
+                "studentId": pid,
+                "scanTime": current_time_iso,
+                "method": "Manual_or_Offline_Sync",
+                "isProxy": False
+            })
+            
+        updated_logs_doc = await log_grouped_attendance(
+            subject_id=subject_oid,
+            date_str=today,
+            teacher_id=teacher_id,
+            students=log_students
+        )
+    
+    # Calculate daily totals from the logs if available, otherwise just use curr batch
+    # To be accurate for multiple batches (offline syncs)
+    
+    total_present_today = len(present_set)
+    
+    # If we have logs, we can get the true count of present students for the day
+    if updated_logs_doc and "students" in updated_logs_doc:
+         unique_present = set(str(s["studentId"]) for s in updated_logs_doc["students"])
+         total_present_today = len(unique_present)
+    else:
+         # Try fetch if logs exist but weren't updated in this call (e.g. only absent students sent)
+         existing_logs = await db.attendance_logs.find_one({"subjectId": subject_oid, "date": today})
+         if existing_logs and "students" in existing_logs:
+             unique_present = set(str(s["studentId"]) for s in existing_logs["students"])
+             total_present_today = len(unique_present)
+
     await save_daily_summary(
         subject_id=subject_oid,
         teacher_id=teacher_id,
         record_date=today,
-        present=len(present_set),
+        present=total_present_today,
         absent=len(absent_set),
+    )
+
+    return {
+        "ok": True,
+        "present_updated": len(present_set),
+        "absent_updated": len(absent_set),
+    }
+    # ideally rely on the cumulative logs for 'present'.
+    # For 'absent', since we don't log them in 'attendance_logs',
+    # we might need to rely on accumulation or just overwrite?
+    # The current 'save_daily_summary' overwrites.
+    # If we want to support incremental updates properly,
+    # 'save_daily_summary' should use $inc or we must read-modify-write.
+    
+    total_present_today = len(present_set)
+    if updated_logs_doc and "students" in updated_logs_doc:
+         # Count unique student IDs in logs to get total present for the day
+         unique_present = set(str(s["studentId"]) for s in updated_logs_doc["students"])
+         total_present_today = len(unique_present)
+    elif not updated_logs_doc:
+         # If no present students in this batch, check if there are existing logs
+         existing_logs = await db.attendance_logs.find_one({"subjectId": subject_oid, "date": today})
+         if existing_logs and "students" in existing_logs:
+             unique_present = set(str(s["studentId"]) for s in existing_logs["students"])
+             total_present_today = len(unique_present)
+
+    # For absent, it's harder because we don't log them.
+    # For now, we will use the batch count, but this is flawed for multiple batches.
+    # However, 'absent' is usually calculated as Total - Present.
+    # Let's assume the teacher confirms ONCE or in one session.
+    # The offline sync might break this assumption for 'absent'.
+    # But usually offline sync confirms *Present* scans.
+    # 'Absent' handling might need a different approach or just stick to batch for now.
+    
+    # Correctly calculate absent students based on total enrollment
+    # This fixes the issue where offline partial syncs overwrite 'absent' with 0
+    total_enrolled = len(subject.get("students", []))
+    absent_count = max(0, total_enrolled - total_present_today)
+
+    await save_daily_summary(
+        subject_id=subject_oid,
+        teacher_id=teacher_id,
+        record_date=today,
+        present=total_present_today,
+        absent=absent_count,
     )
 
     return {

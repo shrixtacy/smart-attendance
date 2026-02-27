@@ -14,10 +14,10 @@ async def ensure_indexes():
         unique=True,
     )
 
-    # Expire documents 24 hours after createdAt (MongoDB 4.2+ builds non-blocking)
+    # Expire documents 7 days after creation
     await db.attendance_logs.create_index(
         "createdAt",
-        expireAfterSeconds=86400,
+        expireAfterSeconds=604800,  # 7 days in seconds
     )
 
 
