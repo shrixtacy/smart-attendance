@@ -107,8 +107,8 @@ export default function Header() {
             </button>
           </div>
 
-          {/* Notification Dropdown */}
-          <NotificationDropdown />
+          {/* Notification Dropdown - only for authenticated users */}
+          {user && <NotificationDropdown />}
 
           {/* Theme Toggle */}
           <button
