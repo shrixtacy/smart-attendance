@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Home, BookOpen, TrendingUp, User, Plus, X, Search } from "lucide-react";
+import { ArrowLeft, Plus, X, Search } from "lucide-react";
 import StudentNavigation from "../components/StudentNavigation";
 import { fetchMySubjects, fetchAvailableSubjects, addSubjectToStudent } from "../../api/students";
 import { useTranslation } from "react-i18next";
@@ -118,30 +118,30 @@ export default function StudentSubjects() {
       <StudentNavigation activePage="subjects" />
 
       {/* 3. Main Content */}
-      <main className="md:ml-64 p-6 md:p-8 pb-24 md:pb-8 animate-in fade-in duration-500 relative">
-        {/* Language Switcher */}
-        <div className="absolute top-6 right-6 z-10">
+      <main className="md:ml-64 p-6 md:p-8 pb-24 md:pb-8 animate-in fade-in duration-500">
+        <div className="max-w-4xl mx-auto space-y-6">
+          
+          {/* Language Switcher - Mobile: Top, Desktop: Top Right */}
+          <div className="flex justify-end mb-4 md:mb-0">
             <div className="flex gap-2 items-center bg-[var(--bg-card)] px-3 py-1.5 rounded-full border border-[var(--border-color)] shadow-sm">
               <button 
                 onClick={() => changeLanguage('en')} 
-                className={`text-xs ${i18n.language === 'en' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-body)]/70 hover:text-[var(--text-body)]'}`}
+                className={`text-xs transition-all ${i18n.language === 'en' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-body)]/70 hover:text-[var(--text-body)]'}`}
               >
                 English
               </button>
               <span className="text-[var(--text-body)]/60 text-xs">|</span>
               <button 
                 onClick={() => changeLanguage('hi')} 
-                className={`text-xs ${i18n.language === 'hi' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-body)]/70 hover:text-[var(--text-body)]'}`}
+                className={`text-xs transition-all ${i18n.language === 'hi' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-body)]/70 hover:text-[var(--text-body)]'}`}
               >
                 हिंदी
               </button>
             </div>
-        </div>
+          </div>
 
-        <div className="max-w-4xl mx-auto space-y-6">
-          
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div className="flex items-center gap-3">
               <button className="p-2 hover:bg-[var(--bg-secondary)] rounded-full transition-colors text-[var(--text-body)]/80">
                 <ArrowLeft size={20} />
@@ -153,10 +153,11 @@ export default function StudentSubjects() {
             </div>
             <button 
               onClick={handleOpenEnroll}
-              className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:bg-[var(--primary-hover)] transition-colors shadow-sm"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-xl hover:bg-[var(--primary-hover)] transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 transform hover:scale-105 group relative overflow-hidden"
             >
-              <Plus size={18} />
-              <span>Enroll Subject</span>
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+              <Plus size={18} className="transition-transform group-hover:rotate-90 duration-300" />
+              <span className="font-semibold">Enroll Subject</span>
             </button>
           </div>
           
