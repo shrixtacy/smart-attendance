@@ -135,10 +135,25 @@ export default function ManageSchedule() {
 
         const data = await getSettings();
         const subjectsData = await fetchMySubjects();
-        const holidaysData = await getHolidays();
-        const examsData = await getExams();
-        
+
+        const [holidaysResult, examsResult] = await Promise.allSettled([
+          getHolidays(),
+          getExams(),
+        ]);
+
         setSubjects(subjectsData);
+
+        const holidaysData =
+          holidaysResult.status === "fulfilled" ? holidaysResult.value : { holidays: [] };
+        const examsData =
+          examsResult.status === "fulfilled" ? examsResult.value : { exams: [] };
+
+        if (holidaysResult.status === "rejected") {
+          console.warn("Failed to load holidays", holidaysResult.reason);
+        }
+        if (examsResult.status === "rejected") {
+          console.warn("Failed to load exams", examsResult.reason);
+        }
         setHolidays(holidaysData.holidays || []);
         setExams(examsData.exams || []);
 
