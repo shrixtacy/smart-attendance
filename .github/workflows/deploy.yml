@@ -1,4 +1,4 @@
-name: Deployment
+name: CI/CD Pipeline (Vercel & Render)
 
 on:
   push:
@@ -7,34 +7,66 @@ on:
     types: [ published ]
 
 jobs:
+  # ==========================================
+  # 🟡 STAGING DEPLOYMENT (Triggered on Push)
+  # ==========================================
   deploy-staging:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: staging
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-    - name: Deploy to Staging
-      run: |
-        echo "Deploying to staging environment..."
-        # Add your staging deployment commands here
-        # e.g., ssh into server, pull latest docker images, restart services
-        # or use a specific deployment action like render-action, aws-ecs, etc.
+      - name: 🚀 Deploy Frontend to Vercel (Preview/Staging)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          # If your frontend is in a subfolder, uncomment and set this:
+          # working-directory: ./frontend
+          github-comment: true
 
+      - name: ⚙️ Trigger Backend Staging Deploy on Render
+        run: |
+          echo "Triggering Render Backend Webhook..."
+          curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK_STAGING }}"
+
+      - name: 🧠 Trigger ML Service Staging Deploy on Render
+        run: |
+          echo "Triggering Render ML Service Webhook..."
+          curl -X POST "${{ secrets.RENDER_ML_DEPLOY_HOOK_STAGING }}"
+
+  # ==========================================
+  # 🟢 PRODUCTION DEPLOYMENT (Triggered on Release)
+  # ==========================================
   deploy-production:
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
     environment: production
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
       
-    - name: Deploy to Production
-      run: |
-        echo "Deploying to production environment..."
-        # Add your production deployment commands here
-        # e.g., ssh into server, pull latest docker images, restart services
-        # or use a specific deployment action like render-action, aws-ecs, etc.
+      - name: 🚀 Deploy Frontend to Vercel (Production)
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod' # This flag forces a production build
+          # working-directory: ./frontend
+          github-comment: false
+
+      - name: ⚙️ Trigger Backend Production Deploy on Render
+        run: |
+          echo "Triggering Render Backend Webhook..."
+          curl -X POST "${{ secrets.RENDER_BACKEND_DEPLOY_HOOK_PROD }}"
+
+      - name: 🧠 Trigger ML Service Production Deploy on Render
+        run: |
+          echo "Triggering Render ML Service Webhook..."
+          curl -X POST "${{ secrets.RENDER_ML_DEPLOY_HOOK_PROD }}"
