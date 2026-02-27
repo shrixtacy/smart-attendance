@@ -156,7 +156,7 @@ export default function StudentSubjects() {
               className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[var(--primary)] text-white rounded-xl hover:bg-[var(--primary-hover)] transition-all duration-300 shadow-md hover:shadow-lg active:scale-95 transform hover:scale-105 group relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-              <Plus size={18} className="transition-transform group-hover:rotate-90 duration-300" />
+              <Plus size={18} />
               <span className="font-semibold">Enroll Subject</span>
             </button>
           </div>
