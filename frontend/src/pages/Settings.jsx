@@ -87,8 +87,8 @@ export default function Settings() {
 
   // Notifications
   const [notifications, setNotifications] = useState({
-    push: true,
-    inApp: true,
+    push: false,
+    inApp: false,
     sound: false,
   });
 
@@ -245,11 +245,26 @@ export default function Settings() {
 
         setTheme(data?.theme ?? data?.settings?.theme ?? "Light");
 
+        // Force defaults to FALSE unless explicitly set to TRUE in DB *AND* browser permission allows
+        const dbPush = data?.settings?.notifications?.push ?? false;
+        const dbInApp = data?.settings?.notifications?.inApp ?? false;
+        const dbSound = data?.settings?.notifications?.sound ?? false;
+
         setNotifications({
-          push: data?.settings?.notifications?.push ?? true,
-          inApp: data?.settings?.notifications?.inApp ?? true,
-          sound: data?.settings?.notifications?.sound ?? false,
+          push: dbPush,
+          inApp: dbInApp,
+          sound: dbSound,
         });
+
+        // Sync with browser permission state - if denied or default (not granted), clamp push to false
+        if ("Notification" in window) {
+          if (Notification.permission !== "granted") {
+            setNotifications((prev) => ({
+              ...prev,
+              push: false,
+            }));
+          }
+        }
 
         setEmailPreferences(data?.settings?.emailPreferences ?? []);
 
@@ -377,6 +392,100 @@ export default function Settings() {
     }, 500);
   };
 
+  const handlePushToggle = async () => {
+    // If permission is already denied, we can't do anything via JS to re-prompt
+    // But we should sync state if user tries to enable
+    if (Notification.permission === "denied" && !notifications.push) {
+       toast.error(t('settings.notifications.permission_denied_browser') || "Notifications are blocked by your browser. Please enable them in site settings.");
+       return;
+    }
+
+    // Toggle logic
+    const nextState = !notifications.push;
+
+    if (nextState) {
+      // User wants to turn ON
+      if (!("Notification" in window)) {
+        toast.error(t('settings.notifications.not_supported') || "This browser does not support desktop notifications");
+        return;
+      }
+
+      if (Notification.permission === "granted") {
+        setNotifications((prev) => ({ ...prev, push: true }));
+      } else if (Notification.permission !== "denied") {
+        // Request permission
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          setNotifications((prev) => ({ ...prev, push: true }));
+          toast.success(t('settings.notifications.enabled') || "Notifications enabled");
+        } else {
+          // Denied or dismissed
+          setNotifications((prev) => ({ ...prev, push: false }));
+          toast.error(t('settings.notifications.permission_denied') || "Notification permission denied");
+        }
+      }
+    } else {
+      // User wants to turn OFF
+      setNotifications((prev) => ({ ...prev, push: false }));
+    }
+  };
+
+  const handleSoundToggle = async () => {
+    const nextState = !notifications.sound;
+
+    if (nextState) {
+        // 1. Check notification permission (often linked to sound)
+        if ("Notification" in window) {
+           if (Notification.permission === "denied") {
+              toast.error(t('settings.notifications.permission_denied_browser') || "Notifications are blocked by your browser.");
+              return;
+           }
+           
+           if (Notification.permission === "default") {
+              const permission = await Notification.requestPermission();
+              if (permission !== "granted") {
+                  setNotifications(prev => ({ ...prev, sound: false }));
+                  return;
+              }
+           }
+        }
+
+        // 2. Play a short silent sound to unlock audio context
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                 toast.error("Audio not supported");
+                 return;
+            }
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.frequency.value = 440; 
+            gain.gain.value = 0.01; // Very quiet
+            
+            osc.start();
+            osc.onended = () => {
+                ctx.close();
+            };
+            setTimeout(() => {
+                osc.stop();
+            }, 100);
+            
+            setNotifications((prev) => ({ ...prev, sound: true }));
+        } catch (e) {
+            console.error("Audio init failed", e);
+            toast.error("Could not initialize audio");
+            setNotifications((prev) => ({ ...prev, sound: false }));
+        }
+    } else {
+      setNotifications((prev) => ({ ...prev, sound: false }));
+    }
+  };
+
   // UI: show a simple loading state until data is loaded
   if (!loaded) {
     return <div className="p-6">Loading settings…</div>;
@@ -475,12 +584,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <button
-                      onClick={() =>
-                        setNotifications({
-                          ...notifications,
-                          push: !notifications.push,
-                        })
-                      }
+                      onClick={handlePushToggle}
                       className={`w-12 h-6 rounded-full transition-colors relative ${notifications.push ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
                       <div
@@ -505,12 +609,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <button
-                      onClick={() =>
-                        setNotifications({
-                          ...notifications,
-                          sound: !notifications.sound,
-                        })
-                      }
+                      onClick={handleSoundToggle}
                       className={`w-12 h-6 rounded-full transition-colors relative ${notifications.sound ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
                       <div
