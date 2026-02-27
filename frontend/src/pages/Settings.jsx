@@ -256,15 +256,14 @@ export default function Settings() {
           sound: dbSound,
         });
 
-        // Sync with browser permission state - if denied or default (not granted), clamp to false
+        // Sync with browser permission state - if denied or default (not granted), clamp push to false
         if ("Notification" in window) {
-           if (Notification.permission !== 'granted') {
-             setNotifications(prev => ({ 
-               ...prev, 
-               push: false,
-               sound: false // Force off if permission not granted so user must toggle to trigger prompt
-             }));
-           }
+          if (Notification.permission !== "granted") {
+            setNotifications((prev) => ({
+              ...prev,
+              push: false,
+            }));
+          }
         }
 
         setEmailPreferences(data?.settings?.emailPreferences ?? []);
