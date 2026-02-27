@@ -370,7 +370,7 @@ export default function Dashboard() {
 
               <div className="flex flex-col items-end gap-3 w-full md:w-auto">
                 {getStatusBadge()}
-                <Link to="/attendance-session" className="w-full md:w-auto px-6 py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] transition shadow-md text-center">
+                <Link to="/attendance" className="w-full md:w-auto px-6 py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] transition shadow-md text-center">
                   {t('dashboard.start_session')}
                 </Link>
                 <div className="flex items-center gap-1.5 text-xs text-[var(--success)] font-medium">

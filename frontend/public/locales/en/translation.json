@@ -304,7 +304,8 @@
     "status": {
       "live": "Live • Active",
       "waking_up": "Waking up...",
-      "connecting": "Connecting..."
+      "connecting": "Connecting...",
+      "offline": "Offline Mode"
     },
     "camera_overlay": {
       "recognition_running": "Recognition running • Auto-marking present",
@@ -330,7 +331,13 @@
       "success": "Attendance saved successfully",
       "failed": "Failed to save attendance",
       "location_issue_title": "Location Service Issue",
-      "select_subject_first": "Please select a subject first"
+      "select_subject_first": "Please select a subject first",
+      "sync_auto": "Will sync automatically when online",
+      "pending_sync_records": "record(s) pending sync",
+      "online_restored": "Connection restored. Syncing...",
+      "offline_mode": "You are offline. Attendance will be saved locally.",
+      "saved_offline": "Saved offline. Will sync when online.",
+      "offline_save_failed": "Failed to save offline data."
     }
   },
   "students": {
