@@ -450,24 +450,7 @@ export default function Settings() {
            }
         }
 
-        // 2. Request permission (use getUserMedia as fallback for "speaker permission")
-        // Most browsers do not have a separate "Speaker" permission, but asking for audio input
-        // often unlocks the audio subsystem and satisfies user checks or specific browser policies.
-        // Some users refer to "Audio Permission" generally.
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            // We don't actually need the stream, so stop it immediately to release the mic
-            stream.getTracks().forEach((track) => track.stop());
-            // This is just to trigger the browser's "Allow Audio?" prompt
-        } catch (err) {
-            console.error("Audio permission denied:", err);
-            if (err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
-                 toast.error("Audio permission required for sound effects");
-                 return;
-            }
-        }
-
-        // 3. Play a short silent sound to unlock audio context
+        // 2. Play a short silent sound to unlock audio context
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (!AudioContext) {
