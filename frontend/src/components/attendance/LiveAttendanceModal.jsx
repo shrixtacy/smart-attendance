@@ -230,11 +230,11 @@ export default function LiveAttendanceModal({ sessionId, subjectId, onClose, sub
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-4 animate-in fade-in duration-200 font-sans">
-      <div className="bg-[var(--bg-card)] rounded-2xl w-full max-w-[1100px] h-[80vh] flex flex-col shadow-2xl overflow-hidden relative border border-[var(--border-color)]">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200 font-sans">
+      <div className="bg-[var(--bg-card)] md:rounded-2xl w-full max-w-[1100px] h-full md:h-[80vh] flex flex-col shadow-2xl overflow-hidden relative border border-[var(--border-color)]">
         
         {/* Header */}
-        <div className="px-6 py-5 flex justify-between items-start bg-[var(--bg-card)]">
+        <div className="px-4 md:px-6 py-4 md:py-5 flex justify-between items-start bg-[var(--bg-card)]">
           <div className="space-y-1">
             <h2 className="text-xl font-bold text-[var(--text-main)] tracking-tight">
               Live Attendance Session
@@ -257,10 +257,10 @@ export default function LiveAttendanceModal({ sessionId, subjectId, onClose, sub
         </div>
 
         {/* Main Content - Split Screen */}
-        <div className="flex-1 flex flex-col md:flex-row overflow-hidden px-6 pb-4 gap-6">
+        <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden px-4 md:px-6 pb-4 gap-4 md:gap-6">
           
           {/* Left Panel: QR & Controls */}
-          <div className="w-full md:w-5/12 flex flex-col h-full bg-[var(--primary)]/5 rounded-3xl p-6 relative overflow-hidden border border-[var(--primary)]/10">
+          <div className="w-full md:w-5/12 flex flex-col h-auto md:h-full min-h-[400px] shrink-0 bg-[var(--primary)]/5 rounded-3xl p-4 md:p-6 relative overflow-hidden border border-[var(--primary)]/10">
              
             <div className="flex justify-between items-center mb-4 relative z-10 w-full">
                 <h3 className="font-semibold text-[var(--text-body)] text-sm">Teacher command center</h3>
@@ -270,7 +270,7 @@ export default function LiveAttendanceModal({ sessionId, subjectId, onClose, sub
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center relative z-10 mb-8">
+            <div className="flex-1 flex flex-col items-center justify-center relative z-10 mb-8 scale-75 sm:scale-90 md:scale-100 origin-center transition-transform">
                 <div className="relative">
                     {/* Rotating Time Indicator (SVG Ring) */}
                     <div className="absolute -inset-4 flex items-center justify-center pointer-events-none">
@@ -321,23 +321,23 @@ export default function LiveAttendanceModal({ sessionId, subjectId, onClose, sub
           </div>
 
           {/* Right Panel: Live Feed */}
-          <div className="w-full md:w-7/12 flex flex-col h-full border border-[var(--border-color)] rounded-3xl bg-[var(--bg-card)] shadow-sm overflow-hidden">
-            <div className="px-6 pt-6 pb-2">
-                <div className="flex justify-between items-start mb-6">
+          <div className="w-full md:w-7/12 flex flex-col h-[400px] md:h-full border border-[var(--border-color)] rounded-3xl bg-[var(--bg-card)] shadow-sm overflow-hidden shrink-0">
+            <div className="px-4 md:px-6 pt-4 md:pt-6 pb-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start mb-4 md:mb-6 gap-2">
                     <div>
                         <h3 className="font-bold text-[var(--text-main)] text-base">Live check-in feed</h3>
                         <p className="text-xs text-[var(--text-body)] mt-1 font-medium">Newest scans appear at the top</p>
                     </div>
-                    <div className="flex bg-[var(--bg-card)] gap-2">
+                    <div className="flex bg-[var(--bg-card)] gap-2 w-full sm:w-auto overflow-x-auto">
                         <button 
                             onClick={() => setActiveTab('Present')}
-                            className={`px-3 py-1 text-xs font-semibold rounded-full transition border ${activeTab === 'Present' ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20' : 'text-[var(--text-body)] border-[var(--border-color)] hover:text-[var(--text-main)]'}`}
+                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1 text-xs font-semibold rounded-full transition border ${activeTab === 'Present' ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20' : 'text-[var(--text-body)] border-[var(--border-color)] hover:text-[var(--text-main)]'}`}
                         >
                             Present • {scannedStudents.length}
                         </button>
                         <button 
                             onClick={() => setActiveTab('All')}
-                            className={`px-3 py-1 text-xs font-semibold rounded-full transition border ${activeTab === 'All' ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20' : 'text-[var(--text-body)] border-[var(--border-color)] hover:text-[var(--text-main)]'}`}
+                            className={`flex-1 sm:flex-none whitespace-nowrap px-3 py-1 text-xs font-semibold rounded-full transition border ${activeTab === 'All' ? 'bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20' : 'text-[var(--text-body)] border-[var(--border-color)] hover:text-[var(--text-main)]'}`}
                         >
                             All students
                         </button>
@@ -505,21 +505,21 @@ export default function LiveAttendanceModal({ sessionId, subjectId, onClose, sub
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-card)] flex justify-between items-center z-20">
-            <div>
+        <div className="px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-card)] flex flex-col sm:flex-row justify-between items-center gap-4 z-20">
+            <div className="text-center sm:text-left">
                  <p className="font-bold text-[var(--text-main)] text-sm">Stop & save to lock this session.</p>
                  <p className="text-xs text-[var(--text-body)] font-medium">Students who haven&apos;t scanned will remain marked absent until updated manually.</p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 w-full sm:w-auto">
                 <button 
                     onClick={handleMinimize}
-                    className="px-4 py-2 rounded-lg bg-[var(--bg-secondary)] text-[var(--text-body)] font-bold hover:opacity-80 transition flex items-center gap-2 text-sm"
+                    className="flex-1 sm:flex-none justify-center px-4 py-2 rounded-lg bg-[var(--bg-secondary)] text-[var(--text-body)] font-bold hover:opacity-80 transition flex items-center gap-2 text-sm"
                 >
                     <Minimize2 size={16} /> Minimize
                 </button>
                 <button 
                     onClick={handleStopAndSave}
-                    className="px-5 py-2 rounded-lg bg-[var(--danger)] text-white font-bold hover:opacity-90 transition shadow-lg shadow-[var(--danger)]/20 flex items-center gap-2 text-sm"
+                    className="flex-1 sm:flex-none justify-center px-5 py-2 rounded-lg bg-[var(--danger)] text-white font-bold hover:opacity-90 transition shadow-lg shadow-[var(--danger)]/20 flex items-center gap-2 text-sm"
                 >
                     <StopCircle size={16} /> Stop & save
                 </button>
