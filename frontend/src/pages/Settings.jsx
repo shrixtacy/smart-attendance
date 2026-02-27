@@ -486,9 +486,11 @@ export default function Settings() {
             gain.gain.value = 0.01; // Very quiet
             
             osc.start();
+            osc.onended = () => {
+                ctx.close();
+            };
             setTimeout(() => {
                 osc.stop();
-                ctx.close();
             }, 100);
             
             setNotifications((prev) => ({ ...prev, sound: true }));
