@@ -30,7 +30,7 @@ async def log_grouped_attendance(
     update_doc = {
         "$addToSet": {"students": {"$each": students}},
         "$setOnInsert": {
-            "createdAt": datetime.now(UTC),
+            "createdAt": datetime.now(timezone.utc),
         },
     }
 
