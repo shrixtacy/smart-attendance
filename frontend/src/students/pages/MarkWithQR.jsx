@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import api from "../../api/axiosClient";
 import QRScanner from "../components/QRScanner";
-import DeviceBindingOTPModal from "../../components/DeviceBindingOTPModal";
+import DeviceBindingOTPModal from "../../components/DeviceBindingOtpModal";
 
 export default function MarkWithQR() {
     const navigate = useNavigate();
