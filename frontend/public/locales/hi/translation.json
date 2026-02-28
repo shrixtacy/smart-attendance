@@ -428,6 +428,8 @@
       "actions": "कार्रवाई"
     },
     "status_unverified": "असत्यापित",
+    "status_verified": "सत्यापित",
+    "status_ready_to_verify": "सत्यापित करने के लिए तैयार",
     "status_waiting_image": "छवि की प्रतीक्षा है",
     "added_time": "{{time}} पहले जोड़ा गया",
     "actions": {
