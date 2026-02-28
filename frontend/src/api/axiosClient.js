@@ -26,17 +26,20 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // Check for device binding error (403 New Device Detected)
-    if (error.response?.status === 403 && 
+    // DEVICE COOLDOWN HANDLING
+    if (error.response?.status === 403 &&
         error.response?.data?.detail?.includes("DEVICE_COOLDOWN")) {
-      // Store device binding state for modal to use
+    
       sessionStorage.setItem(
         "deviceBindingRequired",
         JSON.stringify({
-          error: error.response.data.detail,
+          email: JSON.parse(localStorage.getItem("user"))?.email,
           timestamp: Date.now(),
         })
       );
+    
+      return Promise.reject(error);
+    }
 
       // Import toast dynamically to avoid circular dependencies
       const { toast } = await import("react-hot-toast");
@@ -84,7 +87,7 @@ api.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          const res = await axios.post("/auth/refresh-token", {
+          const res = await axios.post("/api/auth/refresh-token", {
             refresh_token: refreshToken,
           });
 
