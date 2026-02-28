@@ -70,13 +70,15 @@ export default function Analytics() {
 
   const isSubjectSelected = selectedSubject !== "all";
 
-  const filteredBestPerforming = isSubjectSelected
-    ? bestPerforming.filter(item => item.score >= 75).slice(0, 4)
-    : bestPerforming.slice(0, 4);
+  const PERFORMANCE_THRESHOLD = 75;
 
-  const filteredNeedingSupport = isSubjectSelected
-    ? needingSupport.filter(item => item.score < 75).slice(0, 4)
-    : needingSupport.slice(0, 4);
+  const filteredBestPerforming = bestPerforming
+    .filter(item => Number(item.score) >= PERFORMANCE_THRESHOLD)
+    .slice(0, 4);
+
+  const filteredNeedingSupport = needingSupport
+    .filter(item => Number(item.score) < PERFORMANCE_THRESHOLD)
+    .slice(0, 4);
 
   const bestTitle = isSubjectSelected
     ? t('analytics.lists.best_students', { defaultValue: t('analytics.lists.best') })
