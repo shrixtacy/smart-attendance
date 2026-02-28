@@ -8,6 +8,16 @@ export const useDeviceBinding = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userEmail, setUserEmail] = useState("");
 
+  // Testing: Simulate device binding requirement for demonstration
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      window.openDeviceBindingModal = (email = "test@example.com") => {
+        setUserEmail(email);
+        setIsModalOpen(true);
+      };
+    }
+  }, []);
+
   // Check if device binding is required from sessionStorage
   useEffect(() => {
     const checkDeviceBinding = () => {
