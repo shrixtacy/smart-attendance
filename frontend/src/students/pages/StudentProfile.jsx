@@ -17,7 +17,8 @@ import {
   CheckCircle,
   Camera,
   Edit2,
-  LogOut
+  LogOut,
+  Fingerprint
 } from "lucide-react";
 import StudentNavigation from "../components/StudentNavigation";
 import ProfileSkeleton from "../components/ProfileSkeleton";
@@ -26,6 +27,8 @@ import { uploadFaceImage } from "../../api/students";
 import { useTranslation } from "react-i18next";
 import SubjectAttendanceCard from "../../components/SubjectAttendanceCard";
 import { useTheme } from "../../theme/ThemeContext";
+import { registerDevice } from "../../api/webauthn";
+import { toast } from "react-hot-toast";
 
 export default function StudentProfile() {
   const { t, i18n } = useTranslation();
@@ -33,9 +36,24 @@ export default function StudentProfile() {
   const [open, setOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const [isLogoutOpen, setLogoutOpen] = useState(false);
+  const [registeringDevice, setRegisteringDevice] = useState(false);
 
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
+  };
+
+  const handleRegisterDevice = async () => {
+    setRegisteringDevice(true);
+    try {
+      await registerDevice();
+      toast.success("Device registered successfully!");
+      queryClient.invalidateQueries(["myStudentProfile"]);
+    } catch (error) {
+      console.error("Device registration error:", error);
+      toast.error(error.message || "Failed to register device.");
+    } finally {
+      setRegisteringDevice(false);
+    }
   };
 
   const { data, isLoading, isError, error } = useQuery({
@@ -254,7 +272,7 @@ export default function StudentProfile() {
             />
 
             {/* Card: Appearance / Theme Settings */}
-            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-6">
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-6 mb-4">
               <h4 className="text-base font-bold text-slate-800 mb-1">
                 Appearance
               </h4>
@@ -278,6 +296,57 @@ export default function StudentProfile() {
                   <option value="Cyber">Cyber</option>
                 </select>
               </div>
+            </div>
+
+            {/* Card: Biometric/Device Registration */}
+            <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-6 space-y-4">
+               <div>
+                  <h4 className="text-base font-bold text-[var(--text-main)]">
+                    Biometric Authentication
+                  </h4>
+                  <p className="text-xs text-[var(--text-body)]/80 mt-1 max-w-md leading-relaxed">
+                    Register your device (Fingerprint, FaceID, or Windows Hello) for fast, secure attendance marking.
+                  </p>
+               </div>
+               
+               <div>
+                 {data.webauthn_credentials && data.webauthn_credentials.length > 0 ? (
+                   <div className="flex flex-col gap-3">
+                     <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg">
+                        <CheckCircle size={18} className="text-emerald-500" />
+                        <span className="text-sm font-semibold">Device Registered</span>
+                        <span className="text-xs ml-auto text-emerald-600/80 bg-white px-2 py-0.5 rounded-full border border-emerald-100">
+                          {data.webauthn_credentials.length} key(s)
+                        </span>
+                     </div>
+                     <button
+                        onClick={handleRegisterDevice}
+                        disabled={registeringDevice}
+                        className="text-sm text-[var(--text-body)] hover:text-[var(--primary)] font-medium flex items-center gap-2 transition ml-1"
+                     >
+                        <Plus size={14} /> Add another device
+                     </button>
+                   </div>
+                 ) : (
+                    <button
+                        onClick={handleRegisterDevice}
+                        disabled={registeringDevice}
+                        className="bg-[var(--action-info-bg)] hover:bg-[var(--action-info-hover)] active:scale-95 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition flex items-center gap-2 shadow-sm shadow-[var(--primary)]/20"
+                    >
+                        {registeringDevice ? (
+                          <>
+                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                             <span>Registering...</span>
+                          </>
+                        ) : (
+                          <>
+                             <Fingerprint size={18} />
+                             <span>Register Biometrics</span>
+                          </>
+                        )}
+                    </button>
+                 )}
+               </div>
             </div>
 
             {/* Card 2: Face Image Upload */}
