@@ -49,6 +49,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
 oauth = OAuth()
 
+# NOTE: Rate limiter uses slowapi's get_remote_address() which extracts IP from request.client
+# For production deployments behind reverse proxies (nginx, load balancer), ensure the proxy
+# forwards the real client IP via X-Forwarded-For header and configure trusted proxy middleware
+# in main.py to parse it correctly. Otherwise, all requests will be rate-limited by proxy IP.
+# See: https://slowapi.readthedocs.io/en/latest/#using-x-forwarded-for
+
 
 @router.post("/register", response_model=RegisterResponse)
 @limiter.limit("5/hour")
@@ -402,7 +408,10 @@ def _clear_otp_fields() -> dict:
 
 
 @router.post("/forgot-password", response_model=ForgotPasswordResponse)
+@limiter.limit("5/minute")  # Per IP: 5 OTP requests per minute
+@limiter.limit("10/hour")   # Per IP: 10 OTP requests per hour
 async def forgot_password(
+    request: Request,
     payload: ForgotPasswordRequest,
     background_tasks: BackgroundTasks,
 ) -> dict:
@@ -412,6 +421,10 @@ async def forgot_password(
     Generates a secure OTP, hashes it before storing, and enqueues an email via
     Brevo. Returns the same message whether the email exists or not to avoid
     email enumeration.
+    
+    Rate Limits:
+    - 5 OTP requests per minute per IP
+    - 10 OTP requests per hour per IP
     """
     user = await db.users.find_one({"email": payload.email})
     if not user:
@@ -444,12 +457,18 @@ async def forgot_password(
 
 
 @router.post("/verify-otp", response_model=VerifyOtpResponse)
-async def verify_otp(payload: VerifyOtpRequest) -> dict:
+@limiter.limit("3/minute")  # Per IP: 3 attempts per minute
+@limiter.limit("10/hour")   # Per IP: 10 attempts per hour
+async def verify_otp(request: Request, payload: VerifyOtpRequest) -> dict:
     """
     Verify the OTP sent to the user's email.
 
     Returns a generic 400 error for invalid/expired OTP or unknown email to
     prevent enumeration. After 5 failed attempts, the OTP is cleared.
+    
+    Rate Limits:
+    - 3 attempts per minute per IP
+    - 10 attempts per hour per IP
     """
     user = await db.users.find_one({"email": payload.email})
     if not user:
@@ -487,13 +506,19 @@ async def verify_otp(payload: VerifyOtpRequest) -> dict:
 
 
 @router.post("/reset-password", response_model=ResetPasswordResponse)
-async def reset_password(payload: ResetPasswordRequest) -> dict:
+@limiter.limit("3/minute")  # Per IP: 3 attempts per minute
+@limiter.limit("10/hour")   # Per IP: 10 attempts per hour
+async def reset_password(request: Request, payload: ResetPasswordRequest) -> dict:
     """
     Set a new password after OTP verification.
 
     Validates the OTP again (hashed comparison), then updates the password
     and clears all OTP-related fields. Returns a generic 400 for any
     validation failure to prevent email enumeration.
+    
+    Rate Limits:
+    - 3 attempts per minute per IP
+    - 10 attempts per hour per IP
     """
     user = await db.users.find_one({"email": payload.email})
     if not user:
@@ -753,7 +778,10 @@ async def send_device_binding_otp(
 @router.post(
     "/verify-device-binding-otp", response_model=VerifyDeviceBindingOtpResponse
 )
+@limiter.limit("3/minute")  # Per IP: 3 attempts per minute
+@limiter.limit("10/hour")   # Per IP: 10 attempts per hour
 async def verify_device_binding_otp(
+    request: Request,
     payload: VerifyDeviceBindingOtpRequest,
 ) -> dict:
     """
@@ -761,6 +789,10 @@ async def verify_device_binding_otp(
 
     Returns a generic 400 error for invalid/expired OTP or unknown email to
     prevent enumeration. After 5 failed attempts, the OTP is cleared.
+    
+    Rate Limits:
+    - 3 attempts per minute per IP
+    - 10 attempts per hour per IP
     """
     user = await db.users.find_one({"email": payload.email})
     if not user:
