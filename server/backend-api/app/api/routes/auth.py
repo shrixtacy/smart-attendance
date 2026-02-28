@@ -223,11 +223,11 @@ async def login(request: Request, payload: LoginRequest):
                 )
                 raise HTTPException(
                     status_code=403,
-                    detail=(
-                        f"DEVICE_COOLDOWN: You recently logged out. Please wait "
-                        f"{hours_remaining:.1f} hours before logging in from a "
-                        "new device, or verify with OTP."
-                    ),
+                    detail={
+                        "code": "DEVICE_BINDING_REQUIRED",
+                        "message": "New device detected. Please verify with OTP.",
+                        "cooldown_hours_remaining": round(hours_remaining, 1),
+                    },
                 )
 
     # 5. Generate session ID and tokens
@@ -726,11 +726,10 @@ async def send_device_binding_otp(
     )
 
     background_tasks.add_task(
-        BrevoEmailService.send_otp_email,
+        BrevoEmailService.send_device_binding_otp_email,
         payload.email,
         user.get("name", "User"),
         otp,
-        subject="Device Binding Verification",
     )
 
     logger.info(

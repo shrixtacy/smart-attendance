@@ -28,7 +28,7 @@ api.interceptors.response.use(
 
     // Check for device binding error (403 New Device Detected)
     if (error.response?.status === 403 && 
-        error.response?.data?.detail?.includes("New device detected")) {
+        error.response?.data?.detail?.includes("DEVICE_COOLDOWN")) {
       // Store device binding state for modal to use
       sessionStorage.setItem(
         "deviceBindingRequired",
