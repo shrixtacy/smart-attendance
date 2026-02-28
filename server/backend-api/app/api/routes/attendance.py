@@ -22,7 +22,7 @@ from fastapi import Depends
 from app.services.attendance_socket_service import stop_and_save_session, sio
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
+router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
 
 @router.post("/stop-session/{session_id}")
