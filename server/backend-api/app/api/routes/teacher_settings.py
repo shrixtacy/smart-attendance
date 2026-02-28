@@ -498,19 +498,47 @@ async def get_students_attendance_trends(
         student_id_str = str(student_id)
 
         # Query attendance_logs for this student in this subject
+        # attendance_logs schema: { subjectId, date, students: [{ studentId, scanTime, method }] }
+        
         # Current week attendance
-        current_week_count = await db.attendance_logs.count_documents({
-            "student_id": student_id,
-            "subject_id": subj_id,
-            "date": {"$in": current_week_classes}
-        })
+        current_week_pipeline = [
+            {
+                "$match": {
+                    "subjectId": subj_id,
+                    "date": {"$in": current_week_classes},
+                }
+            },
+            {"$unwind": "$students"},
+            {
+                "$match": {
+                    "students.studentId": student_id,
+                }
+            },
+            {"$count": "count"},
+        ]
+        current_week_count = 0
+        async for doc in db.attendance_logs.aggregate(current_week_pipeline):
+            current_week_count = doc.get("count", 0)
 
         # Previous week attendance
-        previous_week_count = await db.attendance_logs.count_documents({
-            "student_id": student_id,
-            "subject_id": subj_id,
-            "date": {"$in": previous_week_classes}
-        })
+        previous_week_pipeline = [
+            {
+                "$match": {
+                    "subjectId": subj_id,
+                    "date": {"$in": previous_week_classes},
+                }
+            },
+            {"$unwind": "$students"},
+            {
+                "$match": {
+                    "students.studentId": student_id,
+                }
+            },
+            {"$count": "count"},
+        ]
+        previous_week_count = 0
+        async for doc in db.attendance_logs.aggregate(previous_week_pipeline):
+            previous_week_count = doc.get("count", 0)
 
         # Calculate percentages
         current_percentage = (
