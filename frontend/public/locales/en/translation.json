@@ -561,7 +561,11 @@
     },
     "lists": {
       "best": "Best performing classes",
-      "needs_support": "Classes needing support"
+      "needs_support": "Classes needing support",
+      "best_students": "Best performing students",
+      "needs_support_students": "Students needing support",
+      "no_students_at_risk": "No students at risk",
+      "no_top_performers": "No students meeting threshold"
     },
     "breakdown": {
       "title": "Class-wise breakdown",
