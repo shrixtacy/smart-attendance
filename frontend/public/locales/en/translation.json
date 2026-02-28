@@ -479,6 +479,8 @@
       "actions": "Actions"
     },
     "status_unverified": "Unverified",
+    "status_verified": "Verified",
+    "status_ready_to_verify": "Ready to verify",
     "status_waiting_image": "Waiting image",
     "added_time": "Added {{time}}",
     "actions": {
