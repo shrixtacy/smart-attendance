@@ -1,4 +1,4 @@
-# backend/app/api/routes/settings.py
+# backend/app/routes/settings.py
 import logging
 
 from app.db.mongo import db
