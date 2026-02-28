@@ -51,12 +51,15 @@ export default function Login() {
       const data = await res.json();
 
       // Clear all existing session data before storing new session
-      localStorage.clear();
+      // localStorage.clear(); // <-- DON'T CLEAR EVERYTHING abruptly. It might clear theme or other settings. And if we rely on device_uuid 
 
       // Save the tokens AND the Device ID
       localStorage.setItem("token", data.token);
       if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
-      localStorage.setItem("user", JSON.stringify(data));
+      // We must stringify user data properly
+      // Ensure 'data' object actually contains the user details as expected by other components
+      // The backend response for login should be checked.
+      localStorage.setItem("user", JSON.stringify(data)); 
       
       // Save the device_id returned by the backend
       if (data.device_id) {
@@ -70,8 +73,14 @@ export default function Login() {
         navigate("/dashboard");
       } else if (userRole === "student") {
         navigate("/student-dashboard");
+      } else if (userRole === "parent") {
+        navigate("/parent/dashboard");
       } else {
-        navigate("/login");
+        // Only redirect to login if role is completely unknown? 
+        // Or maybe show error? 
+        console.error("Unknown role:", userRole);
+        setError("Unknown user role. Please contact support.");
+        // navigate("/login"); // Staying on page to show error might be better
       }
 
     } catch (err) {

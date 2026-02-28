@@ -21,6 +21,10 @@ from fastapi import Depends
 
 from app.services.attendance_socket_service import stop_and_save_session, sio
 
+# Import WebAuthn verification
+from app.services.webauthn_service import verify_auth_response, get_rp_id
+from webauthn.helpers import parse_authentication_credential_json
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/attendance", tags=["Attendance"])
 
@@ -92,7 +96,9 @@ def _parse_object_id_list(
 
 @router.post("/mark-qr")
 async def mark_attendance_qr(
-    payload: QRAttendanceRequest, current_user: dict = Depends(get_current_user)
+    payload: QRAttendanceRequest, 
+    request: Request,
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Mark attendance via QR code with geofencing check and date validation.
@@ -110,7 +116,32 @@ async def mark_attendance_qr(
     if current_user["role"] != "student":
         raise HTTPException(status_code=403, detail="Only students can mark attendance")
 
-    student_oid = ObjectId(current_user["id"])
+    # Fetch full user document for biometrics
+    try:
+        user_id = ObjectId(current_user["id"])
+        user_doc = await db.users.find_one({"_id": user_id})
+        if not user_doc:
+             raise HTTPException(status_code=404, detail="Student not found")
+    except Exception:
+         raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    # -------------------------------------------------------------------------
+    # WebAuthn Verification
+    # -------------------------------------------------------------------------
+    if payload.webauthn_credential:
+        origin = request.headers.get("origin")
+        rp_id = get_rp_id(origin)
+        try:
+           credential_model = parse_authentication_credential_json(payload.webauthn_credential)
+           # Pass the full user_doc, which has _id and webauthn_credentials
+           await verify_auth_response(user_doc, credential_model, origin, rp_id)
+        except Exception as e:
+           raise HTTPException(status_code=400, detail=f"Biometric verification failed: {str(e)}")
+    elif user_doc.get("webauthn_credentials") and len(user_doc["webauthn_credentials"]) > 0:
+        # If user has registered biometrics, they MUST use them.
+        raise HTTPException(status_code=400, detail="Biometric authentication required")
+
+    student_oid = user_id
     subject_id = payload.subjectId
 
     if not ObjectId.is_valid(subject_id):
