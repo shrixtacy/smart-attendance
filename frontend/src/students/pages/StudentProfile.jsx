@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchMyStudentProfile } from "../../api/auth.js";
+import { logout } from "../../api/auth.js";
 import LogoutConfirmDialog from "../../components/LogoutConfirmDialog.jsx";
 import {
   fetchAvailableSubjects,
@@ -492,10 +493,18 @@ export default function StudentProfile() {
 <LogoutConfirmDialog
   isOpen={isLogoutOpen}
   onClose={() => setLogoutOpen(false)}
-  onConfirm={() => {
-    localStorage.removeItem("user");
-    localStorage.removeItem("token");
-    navigate("/");
+  onConfirm={async () => {
+    try {
+      // 1. Notify backend to update the last_logout_time
+      await logout();
+    } catch (error) {
+      console.error("Logout API failed, forcing local logout", error);
+    } finally {
+      // 2. Always clear local storage and redirect
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      navigate("/");
+    }
   }}
 />
              

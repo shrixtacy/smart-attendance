@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Globe } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import EnhancedThemeToggle from "../components/EnhancedThemeToggle";
+// Make sure this path matches your actual file structure
+import DeviceBindingOtpModal from "../components/DeviceBindingOtpModal"; 
 
 export default function Login() {
   const { t, i18n } = useTranslation();
@@ -10,15 +12,14 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
   };
 
   const [remember, setRemeber] = useState(false);
-
   const navigate = useNavigate();
-
   const apiUrl = import.meta.env.VITE_API_URL;
 
   // Google Login
@@ -35,26 +36,34 @@ export default function Login() {
         method: "POST",
         headers: {
           "Content-type": "application/json",
+          // Send existing device UUID if it exists
+          "X-Device-ID": localStorage.getItem("device_uuid") || "",
         },
         body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || t('alerts.login_failed'));
+        // This will throw the string "DEVICE_BINDING_REQUIRED" if the backend sends it
+        throw new Error(data.detail?.message || data.detail || t('alerts.login_failed'));
       }
 
       const data = await res.json();
 
       // Clear all existing session data before storing new session
-      // This ensures no residual data from previous accounts remains
       localStorage.clear();
 
-      localStorage.setItem("token", data.token)
+      // Save the tokens AND the Device ID
+      localStorage.setItem("token", data.token);
       if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
       localStorage.setItem("user", JSON.stringify(data));
+      
+      // Save the device_id returned by the backend
+      if (data.device_id) {
+        localStorage.setItem("device_uuid", data.device_id);
+      }
 
-      // --- FIX: Handle role case sensitivity (Teacher/Student vs teacher/student) ---
+      // Handle role case sensitivity
       const userRole = data.role ? data.role.toLowerCase() : "";
 
       if (userRole === "teacher") {
@@ -65,12 +74,18 @@ export default function Login() {
         navigate("/login");
       }
 
+    } catch (err) {
+      // FIX 1: Properly catch the standard JS Error thrown by the fetch block above
+      const isDeviceBindingError = err.message === "DEVICE_BINDING_REQUIRED";
+
+      if (isDeviceBindingError) {
+        setShowOtpModal(true); // Open the modal instantly
+      } else {
+        console.error("Login error:", err);
+        setError(err.message); // Show normal errors (wrong password, etc.) on the UI
+      }
     }
-    catch (err) {
-      console.error("Login failed:", err);
-      setError(err.message)
-    }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4 relative">
@@ -227,7 +242,6 @@ export default function Login() {
           <div className="absolute inset-0 flex items-center justify-center p-12">
             <div className="text-center space-y-4 relative z-10">
               <div className="w-64 h-64 bg-[var(--bg-card)]/30 backdrop-blur-xl rounded-full mx-auto flex items-center justify-center border border-[var(--bg-card)]/50 shadow-lg mb-8 relative">
-                {/* Placeholder for the 3D illustration shown in design */}
                 <div className="w-48 h-48 bg-[var(--primary)] rounded-full opacity-20 blur-3xl absolute"></div>
                 <span className="text-6xl">🎓</span>
               </div>
@@ -238,8 +252,17 @@ export default function Login() {
             </div>
           </div>
         </div>
-
       </div>
+
+      {/* OTP Modal */}
+      {showOtpModal && (
+        <DeviceBindingOtpModal 
+          isOpen={showOtpModal} 
+          onClose={() => setShowOtpModal(false)}
+          // FIX 2: Prop name must match exactly what the modal expects (userEmail)
+          userEmail={email} 
+        />
+      )}
     </div>
   );
-};
+}
