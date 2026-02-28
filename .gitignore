@@ -70,9 +70,6 @@ frontend/dist/
 frontend/build/
 frontend/.vite/
 frontend/.cache/
-node_modules/
-dist/
-build/
 
 # =========================
 # IDE / EDITORS
