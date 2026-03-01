@@ -23,3 +23,11 @@ class AttendanceConfirm(BaseModel):
     present_students: List[str]
     absent_students: List[str]
 
+class QRAttendanceRequest(BaseModel):
+    subjectId: str
+    date: str
+    sessionId: str
+    token: str
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    webauthn_credential: Optional[dict] = None

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Bell, User, ChevronDown, Menu, X } from "lucide-react";
+import { User, ChevronDown, Menu, X, Sun, Moon } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "../theme/ThemeContext";
+import NotificationDropdown from "./NotificationDropdown";
 
 /** Navigation link definitions for the main header. */
 const navLinks = [
@@ -14,80 +16,66 @@ const navLinks = [
   { to: "/messaging", label: "messaging" },
 ];
 
-/**
- * Header component responsible for rendering the main navigation bar.
- *
- * @param {Object} props
- * @param {"light"|"dark"} props.theme - The current theme.
- * @param {Function} props.setTheme - Callback to update the theme.
- * @returns {React.ReactElement} The rendered header.
- */
 export default function Header() {
   const { t, i18n } = useTranslation();
-  const [user, setUser] = useState(null);
+  const { theme, toggle } = useTheme();
+  const isDark = theme === "Dark";
+
+  const [user] = useState(() => {
+    const storedData = localStorage.getItem("user");
+    if (storedData) {
+        try {
+            return JSON.parse(storedData);
+        } catch {
+            return null;
+        }
+    }
+    return null;
+  });
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
-  useEffect(() => {
-    try {
-      const storedData = localStorage.getItem("user");
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (!storedData) { setUser(null); return; }
-      setUser(JSON.parse(storedData));
-    } catch (e) {
-      console.error("Failed to parse user from local storage", e);
-      setUser(null);
-    }
-  }, []);
-
-  // Close mobile menu on route change
+  // Close menu on route change
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMenuOpen(false);
   }, [location.pathname]);
 
   const displayName = user?.name || user?.email || "Guest";
-
-  /**
-   * Checks whether the given path matches the current route.
-   *
-   * @param {string} path - The route path to check.
-   * @returns {boolean} True if the path is the current route.
-   */
   const isActive = (path) => location.pathname === path;
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-[var(--bg-card)] border-b border-[var(--border-color)] shadow-sm">
-      {/* Main bar */}
+    <header className="sticky top-0 z-50 w-full bg-[var(--bg-card)] shadow-sm">
       <div className="flex items-center justify-between h-16 px-4 md:px-6">
-        {/* Left: Logo + toggle */}
+        {/* Left */}
         <div className="flex items-center gap-3">
-          {/* Mobile toggle button */}
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="lg:hidden p-2 rounded-lg text-[var(--text-body)] hover:bg-[var(--bg-secondary)] transition-colors"
-            aria-label="Toggle navigation"
+            className="lg:hidden p-2 rounded-lg text-[var(--text-body)] hover:bg-[var(--bg-secondary)]"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
-            aria-controls="mobile-nav"
+            aria-controls="mobile-menu"
           >
             {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
 
           <Link to="/dashboard" className="flex items-center gap-3">
             <img className="w-10 h-10 rounded-full" src="/logo.png" alt="Logo" />
-            <h1 className="text-xl font-bold text-[var(--text-main)] hidden sm:block">Smart Attendance</h1>
+            <h1 className="text-xl font-bold text-[var(--text-main)] hidden sm:block">
+              Smart Attendance
+            </h1>
           </Link>
         </div>
 
-        {/* Center: Desktop nav links */}
+        {/* Center */}
         <nav className="hidden lg:flex items-center gap-1">
           {navLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              className={`px-3 py-2 rounded-lg text-sm font-semibold ${
                 isActive(link.to)
-                  ? "text-[var(--primary)] bg-[var(--primary-hover)]/20"
+                  ? "text-[var(--primary)] bg-[var(--action-info-bg)]/10"
                   : "text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
               }`}
             >
@@ -96,73 +84,100 @@ export default function Header() {
           ))}
         </nav>
 
-        {/* Right: Profile section */}
-        <div className="flex items-center gap-3">
-          {/* Language Switcher */}
-          <div className="flex items-center gap-2 mr-2">
-            <button 
-              onClick={() => i18n.changeLanguage('en')} 
-              className={`text-sm transition-colors ${i18n.language === 'en' ? 'font-bold text-[var(--primary)]' : 'text-[var(--text-body)] hover:text-[var(--text-main)]'}`}
+        {/* Right */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Language - Hidden on very small screens */}
+          <div className="hidden xs:flex items-center gap-1 sm:gap-2 mr-1 sm:mr-2" role="group" aria-label="Language selection">
+            <button
+              onClick={() => i18n.changeLanguage("en")}
+              className={`text-xs sm:text-sm ${i18n.language === "en" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+              aria-label="Switch to English"
+              aria-pressed={i18n.language === "en"}
             >
-              English
+              EN
             </button>
-            <span className="text-[var(--border-color)]">|</span>
-            <button 
-              onClick={() => i18n.changeLanguage('hi')} 
-              className={`text-sm transition-colors ${i18n.language === 'hi' ? 'font-bold text-[var(--primary)]' : 'text-[var(--text-body)] hover:text-[var(--text-main)]'}`}
+            <span className="text-[var(--border-color)]" aria-hidden="true">/</span>
+            <button
+              onClick={() => i18n.changeLanguage("hi")}
+              className={`text-xs sm:text-sm ${i18n.language === "hi" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+              aria-label="Switch to Hindi"
+              aria-pressed={i18n.language === "hi"}
             >
-              हिंदी
+              हि
             </button>
           </div>
 
+          {/* Notification Dropdown - only for authenticated users */}
+          {user && <NotificationDropdown />}
+
+          {/* Theme Toggle */}
           <button
-            type="button"
-            disabled
-            aria-label="Notifications"
-            className="bg-[var(--primary)] p-1.5 rounded-full opacity-60"
+            onClick={() => toggle(isDark ? "Light" : "Dark")}
+            className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--bg-secondary)]"
+            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           >
-            <Bell size={16} className="text-[var(--text-on-primary)]" />
+            {isDark ? <Sun size={16} className="text-slate-400 sm:w-[18px] sm:h-[18px]" /> : <Moon size={16} className="text-slate-400 sm:w-[18px] sm:h-[18px]" />}
           </button>
+
+          {/* Profile */}
           <Link
             to="/settings"
-            className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors"
-            aria-label="Open settings"
+            className="hidden sm:flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)]"
           >
             <User size={20} className="text-[var(--text-body)]" />
-            <span className="text-sm font-medium text-[var(--text-main)]">{displayName}</span>
+            <span className="text-sm font-medium text-[var(--text-main)] max-w-[100px] truncate">{displayName}</span>
             <ChevronDown size={16} className="text-[var(--text-body)]" />
           </Link>
         </div>
       </div>
 
-      {/* Mobile nav drawer */}
+      {/* Mobile nav */}
       {menuOpen && (
-        <nav
-          id="mobile-nav"
+        <nav 
+          id="mobile-menu"
+          className="lg:hidden bg-[var(--bg-card)] px-4 pb-4 pt-2 space-y-1 border-t border-[var(--border-color)]"
+          role="navigation"
           aria-label="Mobile navigation"
-          className="lg:hidden border-t border-[var(--border-color)] bg-[var(--bg-card)] px-4 pb-4 pt-2 space-y-1 animate-in slide-in-from-top"
         >
           {navLinks.map((link) => (
             <Link
               key={link.to}
               to={link.to}
-              className={`block px-4 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+              className={`block px-4 py-2.5 rounded-lg text-sm font-semibold ${
                 isActive(link.to)
-                  ? "text-[var(--primary)] bg-[var(--primary-hover)]/20"
+                  ? "text-[var(--primary)] bg-[var(--action-info-bg)]/10"
                   : "text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
               }`}
             >
               {t(`nav.${link.label}`)}
             </Link>
           ))}
-          {/* Mobile-only profile link */}
+          
+          {/* Mobile language switcher */}
+          <div className="flex items-center gap-3 px-4 py-2.5 xs:hidden">
+            <span className="text-sm text-[var(--text-body)]">Language:</span>
+            <button
+              onClick={() => i18n.changeLanguage("en")}
+              className={`text-sm ${i18n.language === "en" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+            >
+              English
+            </button>
+            <span className="text-[var(--border-color)]">/</span>
+            <button
+              onClick={() => i18n.changeLanguage("hi")}
+              className={`text-sm ${i18n.language === "hi" ? "font-bold text-[var(--primary)]" : "text-[var(--text-body)]"}`}
+            >
+              हिंदी
+            </button>
+          </div>
+          
+          {/* Mobile profile link */}
           <Link
             to="/settings"
-            className="sm:hidden flex items-center gap-2 px-4 py-2.5 border-t border-[var(--border-color)] mt-2 pt-3"
-            aria-label="Open settings"
+            className="sm:hidden flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold text-[var(--text-body)] hover:text-[var(--primary)] hover:bg-[var(--bg-secondary)]"
           >
-            <User size={18} className="text-[var(--text-body)]" />
-            <span className="text-sm font-medium text-[var(--text-main)]">{displayName}</span>
+            <User size={18} />
+            <span>{displayName}</span>
           </Link>
         </nav>
       )}

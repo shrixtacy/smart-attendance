@@ -9,3 +9,9 @@ services:
   mongodb:
     volumes:
       - /data/mongodb:/data/db
+
+  frontend:
+    build:
+      target: production
+    restart: always
+    command: [] # Uses default CMD from Dockerfile

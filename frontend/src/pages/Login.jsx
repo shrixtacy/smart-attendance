@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff, Globe } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import EnhancedThemeToggle from "../components/EnhancedThemeToggle";
+// Make sure this path matches your actual file structure
+import DeviceBindingOtpModal from "../components/DeviceBindingOtpModal"; 
 
 export default function Login() {
   const { t, i18n } = useTranslation();
@@ -9,15 +12,14 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [showOtpModal, setShowOtpModal] = useState(false);
 
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
   };
 
   const [remember, setRemeber] = useState(false);
-
   const navigate = useNavigate();
-
   const apiUrl = import.meta.env.VITE_API_URL;
 
   // Google Login
@@ -34,63 +36,93 @@ export default function Login() {
         method: "POST",
         headers: {
           "Content-type": "application/json",
+          // Send existing device UUID if it exists
+          "X-Device-ID": localStorage.getItem("device_uuid") || "",
         },
         body: JSON.stringify({ email, password }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || t('alerts.login_failed'));
+        // This will throw the string "DEVICE_BINDING_REQUIRED" if the backend sends it
+        throw new Error(data.detail?.message || data.detail || t('alerts.login_failed'));
       }
 
       const data = await res.json();
 
-      localStorage.setItem("token", data.token)
-      if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
-      localStorage.setItem("user", JSON.stringify(data));
+      // Clear all existing session data before storing new session
+      // localStorage.clear(); // <-- DON'T CLEAR EVERYTHING abruptly. It might clear theme or other settings. And if we rely on device_uuid 
 
-      // --- FIX: Handle role case sensitivity (Teacher/Student vs teacher/student) ---
+      // Save the tokens AND the Device ID
+      localStorage.setItem("token", data.token);
+      if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
+      // We must stringify user data properly
+      // Ensure 'data' object actually contains the user details as expected by other components
+      // The backend response for login should be checked.
+      localStorage.setItem("user", JSON.stringify(data)); 
+      
+      // Save the device_id returned by the backend
+      if (data.device_id) {
+        localStorage.setItem("device_uuid", data.device_id);
+      }
+
+      // Handle role case sensitivity
       const userRole = data.role ? data.role.toLowerCase() : "";
 
       if (userRole === "teacher") {
         navigate("/dashboard");
       } else if (userRole === "student") {
         navigate("/student-dashboard");
+      } else if (userRole === "parent") {
+        navigate("/parent/dashboard");
       } else {
-        navigate("/login");
+        // Only redirect to login if role is completely unknown? 
+        // Or maybe show error? 
+        console.error("Unknown role:", userRole);
+        setError("Unknown user role. Please contact support.");
+        // navigate("/login"); // Staying on page to show error might be better
       }
 
+    } catch (err) {
+      // FIX 1: Properly catch the standard JS Error thrown by the fetch block above
+      const isDeviceBindingError = err.message === "DEVICE_BINDING_REQUIRED";
+
+      if (isDeviceBindingError) {
+        setShowOtpModal(true); // Open the modal instantly
+      } else {
+        console.error("Login error:", err);
+        setError(err.message); // Show normal errors (wrong password, etc.) on the UI
+      }
     }
-    catch (err) {
-      console.error("Login failed:", err);
-      setError(err.message)
-    }
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4">
-      <div className="max-w-5xl w-full bg-[var(--bg-card)] rounded-3xl shadow-xl overflow-hidden flex flex-col md:flex-row h-[600px]">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-primary)] p-4 relative">
+      {/* Theme Toggle in Top-Right Corner */}
+      <EnhancedThemeToggle position="absolute" />
+      
+      <div className="max-w-5xl w-full bg-[var(--bg-card)] rounded-2xl sm:rounded-3xl shadow-xl overflow-hidden flex flex-col md:flex-row min-h-[500px] md:h-[600px]">
 
         {/* Left Side: Login Form */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
+        <div className="w-full md:w-1/2 p-6 sm:p-8 md:p-12 flex flex-col justify-center">
           <div className="w-full max-w-md mx-auto space-y-8">
 
             {/* Header */}
             <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold text-[var(--text-main)] text-center">{t('auth.signInTitle')}</h1>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-main)]">{t('auth.signInTitle')}</h1>
                 {/* Language Switcher */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 text-sm">
                   <button 
                     onClick={() => changeLanguage('en')} 
-                    className={`text-sm ${i18n.language === 'en' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+                    className={`${i18n.language === 'en' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-body)]/80 hover:text-[var(--text-main)]'}`}
                   >
                     English
                   </button>
-                  <span className="text-gray-300">|</span>
+                  <span className="text-[var(--text-body)]/60">|</span>
                   <button 
                     onClick={() => changeLanguage('hi')} 
-                    className={`text-sm ${i18n.language === 'hi' ? 'font-bold text-blue-600' : 'text-gray-500'}`}
+                    className={`${i18n.language === 'hi' ? 'font-bold text-[var(--primary)] border-b-2 border-[var(--primary)] ' : 'text-[var(--text-body)]/80 hover:text-[var(--text-main)]'}`}
                   >
                     हिंदी
                   </button>
@@ -101,8 +133,13 @@ export default function Login() {
 
             {/* Social Login Buttons */}
             <div className="w-full">
-              <button onClick={googleLogin} className="w-full flex items-center justify-center gap-2 py-2.5 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-secondary)] transition">
-                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+              <button 
+                onClick={googleLogin} 
+                type="button"
+                className="w-full flex items-center justify-center gap-2 py-2.5 border border-[var(--border-color)] rounded-xl hover:bg-[var(--bg-secondary)] transition"
+                aria-label="Sign in with Google"
+              >
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="" className="w-5 h-5" aria-hidden="true" />
                 <span className="text-sm font-medium text-[var(--text-body)]">{t('login.google')}</span>
               </button>
             </div>
@@ -112,7 +149,7 @@ export default function Login() {
                 <span className="w-full border-t border-[var(--border-color)]" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-[var(--bg-card)] px-2 text-[var(--text-body)] opacity-70 font-medium">{t('login.or_continue')}</span>
+                <span className="bg-[var(--bg-card)] px-2 text-[var(--text-body)]/70 font-medium">{t('login.or_continue')}</span>
               </div>
             </div>
 
@@ -122,35 +159,42 @@ export default function Login() {
 
                 {/* Email Input */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-[var(--text-body)]">{t('auth.emailLabel')}</label>
+                  <label htmlFor="email-input" className="text-sm font-semibold text-[var(--text-body)]">{t('auth.emailLabel')}</label>
                   <div className="relative">
                     <input
+                      id="email-input"
                       type="email"
                       placeholder={t('login.email_placeholder')}
-                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10"
+                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      required
+                      autoComplete="email"
                     />
-                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-body)] opacity-70" />
+                    <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-body)]/70" aria-hidden="true" />
                   </div>
                 </div>
 
                 {/* Password Input */}
                 <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-[var(--text-body)]">{t('login.password_label')}</label>
+                  <label htmlFor="password-input" className="text-sm font-semibold text-[var(--text-body)]">{t('login.password_label')}</label>
                   <div className="relative">
                     <input
+                      id="password-input"
                       type={showPassword ? "text" : "password"}
                       placeholder={t('login.password_placeholder')}
-                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10 pr-10"
+                      className="w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] focus:bg-[var(--bg-card)] transition-all pl-10 pr-10"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
                     />
-                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-body)] opacity-70" />
+                    <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-body)]/70" aria-hidden="true" />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-body)] opacity-70 hover:opacity-100 focus:outline-none"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-body)]/70 hover:text-[var(--text-body)] focus:outline-none"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -159,14 +203,17 @@ export default function Login() {
 
                 {/* Additional Options */}
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox"
+                  <label htmlFor="remember-checkbox" className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      id="remember-checkbox"
+                      type="checkbox"
                       checked={remember}
                       onChange={(e) => setRemeber(e.target.checked)}
-                      className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--primary)] focus:ring-[var(--primary)]" />
+                      className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--primary)] focus:ring-[var(--primary)]" 
+                    />
                     <span className="text-sm text-[var(--text-body)] select-none">{t('login.remember_me')}</span>
                   </label>
-                  <Link to="/forgot-password" className="text-sm font-medium text-[var(--primary)] opacity-80 hover:text-[var(--primary)] hover:underline">
+                  <Link to="/forgot-password" className="text-sm font-medium text-[var(--primary)]/80 hover:text-[var(--primary)] hover:underline">
                     {t('login.forgot_password')}
                   </Link>
                 </div>
@@ -177,7 +224,11 @@ export default function Login() {
                 <p className="text-[var(--danger)] text-sm font-medium text-center">{error}</p>
               )}
 
-              <button className="w-full py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] hover:text-[var(--text-main)] shadow-md transition-all active:scale-[0.98]">
+              <button 
+                type="submit"
+                className="w-full py-3 bg-[var(--primary)] text-[var(--text-on-primary)] rounded-xl font-semibold hover:bg-[var(--primary-hover)] hover:text-[var(--text-main)] hover:opacity-95 shadow-md transition-all active:scale-[0.98]"
+                aria-label="Submit login form"
+              >
                 {t('login.submit')}
               </button>
             </form>
@@ -200,7 +251,6 @@ export default function Login() {
           <div className="absolute inset-0 flex items-center justify-center p-12">
             <div className="text-center space-y-4 relative z-10">
               <div className="w-64 h-64 bg-[var(--bg-card)]/30 backdrop-blur-xl rounded-full mx-auto flex items-center justify-center border border-[var(--bg-card)]/50 shadow-lg mb-8 relative">
-                {/* Placeholder for the 3D illustration shown in design */}
                 <div className="w-48 h-48 bg-[var(--primary)] rounded-full opacity-20 blur-3xl absolute"></div>
                 <span className="text-6xl">🎓</span>
               </div>
@@ -211,8 +261,17 @@ export default function Login() {
             </div>
           </div>
         </div>
-
       </div>
+
+      {/* OTP Modal */}
+      {showOtpModal && (
+        <DeviceBindingOtpModal 
+          isOpen={showOtpModal} 
+          onClose={() => setShowOtpModal(false)}
+          // FIX 2: Prop name must match exactly what the modal expects (userEmail)
+          userEmail={email} 
+        />
+      )}
     </div>
   );
 }

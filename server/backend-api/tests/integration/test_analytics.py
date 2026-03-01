@@ -9,11 +9,22 @@ from datetime import datetime, timedelta
 
 
 @pytest.mark.asyncio
-async def test_attendance_trend(client: AsyncClient, db):
+async def test_attendance_trend(client: AsyncClient, db, teacher_token_header):
     """Test GET /api/analytics/attendance-trend endpoint"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+
     # Create a test class
     class_id = ObjectId()
     subject_id = class_id
+    await db.subjects.insert_one(
+        {
+            "_id": class_id,
+            "name": "Computer Science",
+            "code": "CS101",
+            "professor_ids": [teacher_id],
+        }
+    )
 
     # Insert test data for different dates
     today = datetime.now().date()
@@ -23,27 +34,30 @@ async def test_attendance_trend(client: AsyncClient, db):
         today.isoformat(),
     ]
 
+    daily_map = {}
     for i, date_str in enumerate(dates):
-        await db.attendance_daily.insert_one(
-            {
-                "classId": class_id,
-                "subjectId": subject_id,
-                "date": date_str,
-                "teacherId": ObjectId(),
-                "summary": {
-                    "present": 20 + i,
-                    "absent": 5 - i,
-                    "late": 1,
-                    "total": 26,
-                    "percentage": round(((20 + i) / 26) * 100, 2),
-                },
-                "createdAt": datetime.now(),
-            }
-        )
+        daily_map[date_str] = {
+            "present": 20 + i,
+            "absent": 5 - i,
+            "late": 1,
+            "total": 26,
+            "percentage": round(((20 + i) / 26) * 100, 2),
+            "teacherId": ObjectId(),
+        }
+
+    await db.attendance_daily.insert_one(
+        {
+            "classId": class_id,
+            "subjectId": subject_id,
+            "daily": daily_map,
+            "createdAt": datetime.now(),
+        }
+    )
 
     # Test the endpoint
     response = await client.get(
-        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom={dates[0]}&dateTo={dates[2]}"
+        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom={dates[0]}&dateTo={dates[2]}",
+        headers=headers,
     )
 
     assert response.status_code == 200
@@ -66,91 +80,95 @@ async def test_attendance_trend(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_attendance_trend_invalid_dates(client: AsyncClient, db):
+async def test_attendance_trend_invalid_dates(
+    client: AsyncClient, db, teacher_token_header
+):
     """Test attendance trend with invalid date formats"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
     class_id = ObjectId()
 
     # Invalid date format
     response = await client.get(
-        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom=invalid&dateTo=2024-01-01"
+        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom=invalid&dateTo=2024-01-01",
+        headers=headers,
     )
     assert response.status_code == 400
     assert "Invalid date format" in response.json()["detail"]
 
     # dateFrom after dateTo
     response = await client.get(
-        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom=2024-12-31&dateTo=2024-01-01"
+        f"/api/analytics/attendance-trend?classId={str(class_id)}&dateFrom=2024-12-31&dateTo=2024-01-01",
+        headers=headers,
     )
     assert response.status_code == 400
     assert "dateFrom must be before dateTo" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_attendance_trend_invalid_class_id(client: AsyncClient, db):
+async def test_attendance_trend_invalid_class_id(
+    client: AsyncClient, db, teacher_token_header
+):
     """Test attendance trend with invalid classId"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
     response = await client.get(
-        "/api/analytics/attendance-trend?classId=invalid&dateFrom=2024-01-01&dateTo=2024-12-31"
+        "/api/analytics/attendance-trend?classId=invalid&dateFrom=2024-01-01&dateTo=2024-12-31",
+        headers=headers,
     )
     assert response.status_code == 400
     assert "Invalid classId" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_monthly_summary(client: AsyncClient, db):
+async def test_monthly_summary(client: AsyncClient, db, teacher_token_header):
     """Test GET /api/analytics/monthly-summary endpoint"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
     class_id = ObjectId()
+    await db.subjects.insert_one(
+        {
+            "_id": class_id,
+            "name": "Computer Science",
+            "code": "CS101",
+            "professor_ids": [teacher_id],
+        }
+    )
 
     # Insert test data for different months
-    await db.attendance_daily.insert_one(
-        {
-            "classId": class_id,
-            "subjectId": class_id,
-            "date": "2024-01-15",
+    daily_map = {
+        "2024-01-15": {
+            "present": 20,
+            "absent": 5,
+            "late": 1,
+            "total": 26,
+            "percentage": 76.92,
             "teacherId": ObjectId(),
-            "summary": {
-                "present": 20,
-                "absent": 5,
-                "late": 1,
-                "total": 26,
-                "percentage": 76.92,
-            },
-        }
-    )
+        },
+        "2024-01-20": {
+            "present": 22,
+            "absent": 4,
+            "late": 0,
+            "total": 26,
+            "percentage": 84.62,
+            "teacherId": teacher_id,
+        },
+        "2024-02-10": {
+            "present": 18,
+            "absent": 8,
+            "late": 0,
+            "total": 26,
+            "percentage": 69.23,
+            "teacherId": teacher_id,
+        },
+    }
 
     await db.attendance_daily.insert_one(
-        {
-            "classId": class_id,
-            "subjectId": class_id,
-            "date": "2024-01-20",
-            "teacherId": ObjectId(),
-            "summary": {
-                "present": 22,
-                "absent": 4,
-                "late": 0,
-                "total": 26,
-                "percentage": 84.62,
-            },
-        }
-    )
-
-    await db.attendance_daily.insert_one(
-        {
-            "classId": class_id,
-            "subjectId": class_id,
-            "date": "2024-02-10",
-            "teacherId": ObjectId(),
-            "summary": {
-                "present": 18,
-                "absent": 8,
-                "late": 0,
-                "total": 26,
-                "percentage": 69.23,
-            },
-        }
+        {"classId": class_id, "subjectId": class_id, "daily": daily_map}
     )
 
     # Test without filter
-    response = await client.get("/api/analytics/monthly-summary")
+    response = await client.get("/api/analytics/monthly-summary", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "data" in data
@@ -158,7 +176,8 @@ async def test_monthly_summary(client: AsyncClient, db):
 
     # Test with classId filter
     response = await client.get(
-        f"/api/analytics/monthly-summary?classId={str(class_id)}"
+        f"/api/analytics/monthly-summary?classId={str(class_id)}",
+        headers=headers,
     )
     assert response.status_code == 200
     data = response.json()
@@ -175,16 +194,36 @@ async def test_monthly_summary(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_monthly_summary_invalid_class_id(client: AsyncClient, db):
+async def test_monthly_summary_invalid_class_id(
+    client: AsyncClient, db, teacher_token_header
+):
     """Test monthly summary with invalid classId"""
-    response = await client.get("/api/analytics/monthly-summary?classId=invalid")
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+
+    # Create at least one subject so the endpoint doesn't return early
+    await db.subjects.insert_one(
+        {
+            "name": "Chemistry",
+            "code": "CHEM101",
+            "professor_ids": [teacher_id],
+        }
+    )
+
+    response = await client.get(
+        "/api/analytics/monthly-summary?classId=invalid",
+        headers=headers,
+    )
     assert response.status_code == 400
     assert "Invalid classId" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_class_risk(client: AsyncClient, db):
+async def test_class_risk(client: AsyncClient, db, teacher_token_header):
     """Test GET /api/analytics/class-risk endpoint"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+
     # Create test classes with different attendance rates
 
     # Class 1: High attendance (>75%)
@@ -194,19 +233,21 @@ async def test_class_risk(client: AsyncClient, db):
             "_id": class1_id,
             "name": "Computer Science",
             "code": "CS101",
+            "professor_ids": [teacher_id],
         }
     )
     await db.attendance_daily.insert_one(
         {
             "classId": class1_id,
             "subjectId": class1_id,
-            "date": "2024-01-15",
-            "summary": {
-                "present": 23,
-                "absent": 3,
-                "late": 0,
-                "total": 26,
-                "percentage": 88.46,
+            "daily": {
+                "2024-01-15": {
+                    "present": 23,
+                    "absent": 3,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 88.46,
+                }
             },
         }
     )
@@ -218,19 +259,21 @@ async def test_class_risk(client: AsyncClient, db):
             "_id": class2_id,
             "name": "Mathematics",
             "code": "MATH101",
+            "professor_ids": [teacher_id],
         }
     )
     await db.attendance_daily.insert_one(
         {
             "classId": class2_id,
             "subjectId": class2_id,
-            "date": "2024-01-15",
-            "summary": {
-                "present": 15,
-                "absent": 11,
-                "late": 0,
-                "total": 26,
-                "percentage": 57.69,
+            "daily": {
+                "2024-01-15": {
+                    "present": 15,
+                    "absent": 11,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 57.69,
+                }
             },
         }
     )
@@ -242,25 +285,27 @@ async def test_class_risk(client: AsyncClient, db):
             "_id": class3_id,
             "name": "Physics",
             "code": "PHY101",
+            "professor_ids": [teacher_id],
         }
     )
     await db.attendance_daily.insert_one(
         {
             "classId": class3_id,
             "subjectId": class3_id,
-            "date": "2024-01-16",
-            "summary": {
-                "present": 18,
-                "absent": 8,
-                "late": 0,
-                "total": 26,
-                "percentage": 69.23,
+            "daily": {
+                "2024-01-16": {
+                    "present": 18,
+                    "absent": 8,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 69.23,
+                }
             },
         }
     )
 
     # Test the endpoint
-    response = await client.get("/api/analytics/class-risk")
+    response = await client.get("/api/analytics/class-risk", headers=headers)
     assert response.status_code == 200
     data = response.json()
 
@@ -292,8 +337,11 @@ async def test_class_risk(client: AsyncClient, db):
 
 
 @pytest.mark.asyncio
-async def test_class_risk_empty(client: AsyncClient, db):
+async def test_class_risk_empty(client: AsyncClient, db, teacher_token_header):
     """Test class risk when no classes are at risk"""
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+
     # Create a class with high attendance
     class_id = ObjectId()
     await db.subjects.insert_one(
@@ -301,30 +349,257 @@ async def test_class_risk_empty(client: AsyncClient, db):
             "_id": class_id,
             "name": "Computer Science",
             "code": "CS101",
+            "professor_ids": [teacher_id],
         }
     )
     await db.attendance_daily.insert_one(
         {
             "classId": class_id,
             "subjectId": class_id,
-            "date": "2024-01-15",
-            "summary": {
-                "present": 24,
-                "absent": 2,
-                "late": 0,
-                "total": 26,
-                "percentage": 92.31,
+            "daily": {
+                "2024-01-15": {
+                    "present": 24,
+                    "absent": 2,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 92.31,
+                }
             },
         }
     )
 
     # Test the endpoint
-    response = await client.get("/api/analytics/class-risk")
+    response = await client.get("/api/analytics/class-risk", headers=headers)
     assert response.status_code == 200
     data = response.json()
 
     assert "data" in data
     assert len(data["data"]) == 0  # No classes at risk
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/analytics/attendance-trend?classId=507f1f77bcf86cd799439011&dateFrom=2024-01-01&dateTo=2024-01-31",
+        "/api/analytics/monthly-summary",
+        "/api/analytics/class-risk",
+    ],
+)
+async def test_analytics_requires_auth(client: AsyncClient, db, path):
+    response = await client.get(path)
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/analytics/attendance-trend?classId=507f1f77bcf86cd799439011&dateFrom=2024-01-01&dateTo=2024-01-31",
+        "/api/analytics/monthly-summary",
+        "/api/analytics/class-risk",
+    ],
+)
+async def test_analytics_teacher_only(
+    client: AsyncClient, db, student_token_header, path
+):
+    student_id = ObjectId()
+    response = await client.get(path, headers=student_token_header(str(student_id)))
+    assert response.status_code == 403
+    assert "Only teachers" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_attendance_trend_forbidden_for_unowned_class(
+    client: AsyncClient, db, teacher_token_header
+):
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+    other_teacher_id = ObjectId()
+    class_id = ObjectId()
+
+    await db.subjects.insert_one(
+        {
+            "_id": class_id,
+            "name": "Mathematics",
+            "code": "MATH101",
+            "professor_ids": [other_teacher_id],
+        }
+    )
+
+    response = await client.get(
+        f"/api/analytics/attendance-trend?classId={class_id}&dateFrom=2024-01-01&dateTo=2024-01-31",
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    assert "access to this class" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_monthly_summary_forbidden_for_unowned_class(
+    client: AsyncClient, db, teacher_token_header
+):
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+    other_teacher_id = ObjectId()
+    class_id = ObjectId()
+
+    # Create at least one subject for the teacher so the endpoint doesn't return early
+    await db.subjects.insert_one(
+        {
+            "name": "Chemistry",
+            "code": "CHEM101",
+            "professor_ids": [teacher_id],
+        }
+    )
+
+    await db.subjects.insert_one(
+        {
+            "_id": class_id,
+            "name": "Mathematics",
+            "code": "MATH101",
+            "professor_ids": [other_teacher_id],
+        }
+    )
+
+    response = await client.get(
+        f"/api/analytics/monthly-summary?classId={class_id}",
+        headers=headers,
+    )
+
+    assert response.status_code == 403
+    assert "access to this class" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_monthly_summary_filters_to_teacher_subjects(
+    client: AsyncClient, db, teacher_token_header
+):
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+    own_subject = ObjectId()
+    other_subject = ObjectId()
+
+    await db.subjects.insert_many(
+        [
+            {
+                "_id": own_subject,
+                "name": "Owned Subject",
+                "code": "OWN101",
+                "professor_ids": [teacher_id],
+            },
+            {
+                "_id": other_subject,
+                "name": "Other Subject",
+                "code": "OTH101",
+                "professor_ids": [ObjectId()],
+            },
+        ]
+    )
+
+    await db.attendance_daily.insert_many(
+        [
+            {
+                "classId": own_subject,
+                "subjectId": own_subject,
+                "daily": {
+                    "2024-01-15": {
+                        "present": 18,
+                        "absent": 8,
+                        "late": 0,
+                        "total": 26,
+                        "percentage": 69.23,
+                    }
+                },
+            },
+            {
+                "classId": other_subject,
+                "subjectId": other_subject,
+                "daily": {
+                    "2024-01-15": {
+                        "present": 5,
+                        "absent": 21,
+                        "late": 0,
+                        "total": 26,
+                        "percentage": 19.23,
+                    }
+                },
+            },
+        ]
+    )
+
+    response = await client.get("/api/analytics/monthly-summary", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert len(data) == 1
+    assert data[0]["classId"] == str(own_subject)
+
+
+@pytest.mark.asyncio
+async def test_class_risk_filters_to_teacher_subjects(
+    client: AsyncClient, db, teacher_token_header
+):
+    teacher_id = ObjectId()
+    headers = teacher_token_header(str(teacher_id))
+    own_subject = ObjectId()
+    other_subject = ObjectId()
+
+    await db.subjects.insert_many(
+        [
+            {
+                "_id": own_subject,
+                "name": "Owned Subject",
+                "code": "OWN101",
+                "professor_ids": [teacher_id],
+            },
+            {
+                "_id": other_subject,
+                "name": "Other Subject",
+                "code": "OTH101",
+                "professor_ids": [ObjectId()],
+            },
+        ]
+    )
+
+    await db.attendance_daily.insert_many(
+        [
+            {
+                "classId": own_subject,
+                "subjectId": own_subject,
+                "daily": {
+                    "2024-01-15": {
+                        "present": 18,
+                        "absent": 8,
+                        "late": 0,
+                        "total": 26,
+                        "percentage": 69.23,
+                    }
+                },
+            },
+            {
+                "classId": other_subject,
+                "subjectId": other_subject,
+                "daily": {
+                    "2024-01-15": {
+                        "present": 3,
+                        "absent": 23,
+                        "late": 0,
+                        "total": 26,
+                        "percentage": 11.54,
+                    }
+                },
+            },
+        ]
+    )
+
+    response = await client.get("/api/analytics/class-risk", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert len(data) == 1
+    assert data[0]["classId"] == str(own_subject)
 
 
 @pytest.mark.asyncio
@@ -364,35 +639,29 @@ async def test_global_stats(client: AsyncClient, db, teacher_token_header):
 
     # Create attendance records for each subject
     # Subject 1: High attendance (85%)
-    await db.attendance_daily.insert_many(
-        [
-            {
-                "classId": subject1_id,
-                "subjectId": subject1_id,
-                "teacherId": teacher_id,
-                "date": "2024-01-15",
-                "summary": {
+    await db.attendance_daily.insert_one(
+        {
+            "classId": subject1_id,
+            "subjectId": subject1_id,
+            "daily": {
+                "2024-01-15": {
                     "present": 22,
                     "absent": 4,
                     "late": 0,
                     "total": 26,
                     "percentage": 84.62,
+                    "teacherId": teacher_id,
                 },
-            },
-            {
-                "classId": subject1_id,
-                "subjectId": subject1_id,
-                "teacherId": teacher_id,
-                "date": "2024-01-16",
-                "summary": {
+                "2024-01-16": {
                     "present": 23,
                     "absent": 3,
                     "late": 0,
                     "total": 26,
                     "percentage": 88.46,
+                    "teacherId": teacher_id,
                 },
             },
-        ]
+        }
     )
 
     # Subject 2: Medium attendance (70% - at risk)
@@ -400,14 +669,15 @@ async def test_global_stats(client: AsyncClient, db, teacher_token_header):
         {
             "classId": subject2_id,
             "subjectId": subject2_id,
-            "teacherId": teacher_id,
-            "date": "2024-01-15",
-            "summary": {
-                "present": 18,
-                "absent": 8,
-                "late": 0,
-                "total": 26,
-                "percentage": 69.23,
+            "daily": {
+                "2024-01-15": {
+                    "present": 18,
+                    "absent": 8,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 69.23,
+                    "teacherId": teacher_id,
+                }
             },
         }
     )
@@ -417,14 +687,15 @@ async def test_global_stats(client: AsyncClient, db, teacher_token_header):
         {
             "classId": subject3_id,
             "subjectId": subject3_id,
-            "teacherId": teacher_id,
-            "date": "2024-01-15",
-            "summary": {
-                "present": 24,
-                "absent": 2,
-                "late": 0,
-                "total": 26,
-                "percentage": 92.31,
+            "daily": {
+                "2024-01-15": {
+                    "present": 24,
+                    "absent": 2,
+                    "late": 0,
+                    "total": 26,
+                    "percentage": 92.31,
+                    "teacherId": teacher_id,
+                }
             },
         }
     )

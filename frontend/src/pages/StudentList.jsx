@@ -1,36 +1,54 @@
 import React, { useEffect, useState } from "react";
 import { 
-  Search, 
-  Filter, 
+  Search,  
   Download, 
   Plus, 
-  MoreHorizontal, 
-  ChevronDown,
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { fetchMySubjects, fetchSubjectStudents } from "../api/teacher";
+import { toast } from "react-hot-toast";
+import { fetchMySubjects, fetchSubjectStudents, fetchStudentsTrends, exportStudentRoster } from "../api/teacher";
 
 export default function StudentList() {
   const { t } = useTranslation();
   const [subjects, setSubjects] = useState([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [students, setStudents] = useState([]);
+  const [trends, setTrends] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedFilter, setSelectedFilter] = useState("All");
-  const [sortOrder, setSortOrder] = useState("desc"); // "asc" or "desc"
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [isExporting, setIsExporting] = useState(false);
   const navigate = useNavigate();
 
-  // Simulating the fetch call you had
   useEffect(() => {
-    fetchMySubjects().then(setSubjects);
+    fetchMySubjects()
+      .then(setSubjects)
+      .catch((error) => {
+        console.error("Failed to fetch subjects:", error);
+      })
+      .finally(() => setSubjectsLoading(false));
   }, []);
 
   useEffect(() => {
     if(!selectedSubject) return;
-    fetchSubjectStudents(selectedSubject).then(setStudents);
+    
+    // Fetch students and trends in parallel
+    Promise.all([
+      fetchSubjectStudents(selectedSubject),
+      fetchStudentsTrends(selectedSubject)
+    ])
+      .then(([studentsData, trendsData]) => {
+        setStudents(studentsData);
+        setTrends(trendsData);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch student data:", error);
+        toast.error("Failed to load student data");
+      });
   }, [selectedSubject])
 
   const verifiedStudents = students.filter(
@@ -78,9 +96,28 @@ export default function StudentList() {
     return sortOrder === "desc" ? percentageB - percentageA : percentageA - percentageB;
   });
 
-  // Toggle sort order
   const handleSortToggle = () => {
     setSortOrder(prev => prev === "desc" ? "asc" : "desc");
+  };
+
+  const handleExportRoster = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await exportStudentRoster(selectedSubject);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `student_roster_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Roster exported successfully");
+    } catch {
+      toast.error("Failed to export roster");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
 
@@ -128,9 +165,12 @@ export default function StudentList() {
           <p className="text-[var(--text-body)]">{t('students.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium flex items-center gap-2 transition cursor-pointer">
+          <button 
+            onClick={handleExportRoster}
+            disabled={isExporting}
+            className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-main)] rounded-lg hover:bg-[var(--bg-secondary)] font-medium flex items-center gap-2 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
             <Download size={18} />
-            {t('students.export_list')}
+            {isExporting ? t('common.loading', 'Loading...') : t('students.export_list')}
           </button>
           <button
            onClick={() => navigate('/add-students')}
@@ -157,13 +197,13 @@ export default function StudentList() {
                 placeholder={t('students.search_placeholder')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-[color:var(--bg-secondary)] border-none rounded-lg text-sm focus:ring-2 focus:ring-[color:var(--primary)] outline-none"
+                className="w-full h-10 pl-10 pr-4 bg-[color:var(--bg-secondary)] border-none rounded-lg text-sm focus:ring-2 focus:ring-[color:var(--primary)] outline-none"
               />
             </div>
 
             {/* Filter Controls */}
             <div className="flex flex-wrap items-center gap-2">
-              <select
+              {/* <select
                 value={selectedSubject || ""}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 className="flex items-center gap-1 text-sm font-medium text-[color:var(--text-body)] px-3 py-1.5 hover:bg-[color:var(--bg-secondary)] rounded-lg cursor-pointer"
@@ -174,9 +214,29 @@ export default function StudentList() {
                     {s.name} ({s.code})
                   </option>
                 ))}
-              </select>
+              </select> */}
+            <div className="w-[220px] min-w-[220px] shrink-0">
+              <select value={selectedSubject || ""}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                disabled={subjectsLoading}
+                className="w-full h-9 text-sm font-medium text-[color:var(--text-body)] px-3 bg-[color:var(--bg-secondary)] rounded-lg cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 outline-none focus:ring-2 focus:ring-[color:var(--primary)]"
+                title={t("students.select_subject")}
+              >
+                {subjectsLoading ? (<option value="">{t("common.loading", "Loading...")}</option>
+              ) : ( 
+                <>
+                 <option value="">{t("students.select_subject")}</option> 
+                 {subjects.map((s) => (
+                   <option key={s._id} value={s._id}>
+                   {s.name} ({s.code})
+                 </option>
+                ))}
+                </>
+               )}
+             </select>
+            </div>
 
-              <button 
+              {/* <button 
                 onClick={handleSortToggle}
                 className="flex items-center gap-1 text-sm font-medium text-[color:var(--text-body)] px-3 py-1.5 hover:bg-[color:var(--bg-secondary)] rounded-lg cursor-pointer"
                 title="Sort by attendance"
@@ -187,9 +247,18 @@ export default function StudentList() {
                   size={14} 
                   className={`transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} 
                 />
+              </button> */}
+              <button
+                onClick={handleSortToggle}
+                className="h-9 px-3 rounded-lg text-sm font-medium text-[color:var(--text-body)] hover:bg-[color:var(--bg-secondary)] flex items-center gap-2 cursor-pointer"
+                title={t("students.sort_by_attendance")}
+                type="button"
+              >
+                {sortOrder === "asc" ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                <span className="hidden md:inline">{t("students.sort_by_attendance")}</span>
               </button>
               
-              <div className="hidden sm:block h-6 w-px bg-[color:var(--border-color)] mx-1"></div>
+              <div className="hidden md:block h-6 w-px bg-[color:var(--border-color)] mx-1"></div>
 
               {["All", "High (> 90%)", "Medium (75-90%)", "Low (< 75%)"].map((filter) => {
                 const getLabel = () => {
@@ -210,17 +279,18 @@ export default function StudentList() {
 
                 return (
                   <button 
+                    type="button"
                     key={filter}
                     onClick={() => setSelectedFilter(filter)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                    className={`h-9 px-3 rounded-lg text-sm font-medium transition cursor-pointer ${
                       selectedFilter === filter 
                       ? "bg-[var(--primary)]/10 text-[var(--primary)]"
-                      : "text-[var(--text-body)] hover:bg-[var(--bg-hover)]"
+                      : "text-[var(--text-body)] hover:bg-[var(--bg-secondary)]"
                     }`}
                     title={getLabel()}
                   >
-                    <span className="hidden sm:inline">{getLabel()}</span>
-                    <span className="sm:hidden">{getShortLabel()}</span>
+                    <span className="hidden md:inline">{getLabel()}</span>
+                    <span className="md:hidden">{getShortLabel()}</span>
                   </button>
                 );
               })}
@@ -237,13 +307,12 @@ export default function StudentList() {
                     <th className="px-6 py-4">{t('students.table.student')}</th>
                     <th className="px-6 py-4">{t('students.table.visual_grade')}</th>
                     <th className="px-6 py-4">{t('students.table.trend')}</th>
-                    <th className="px-6 py-4 text-right">{t('students.table.actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-color)]">
                   {sortedStudents.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-12 text-center">
+                      <td colSpan="4" className="px-6 py-12 text-center">
                         <div className="text-[var(--text-body)] opacity-80">
                           <p className="text-lg font-medium">{t('students.no_students_found')}</p>
                           <p className="text-sm mt-1">
@@ -259,11 +328,12 @@ export default function StudentList() {
                   ) : (
                     sortedStudents.map((student) => {
                       const percentage = calculateAttendancePercentage(student);
+                      const studentTrend = trends[student.student_id] || { trend: 0 };
+                      const trend = studentTrend.trend;
 
                     // derive UI-only values (NO design change)
                     let color = "amber";
                     let status = t('students.status.moderate');
-                    let trend = 0;
 
                     if (percentage > 90) {
                       color = "green";
@@ -276,7 +346,7 @@ export default function StudentList() {
                     return (
                       <tr
                         key={student.student_id}
-                        className="hover:bg-[var(--bg-hover)] transition-colors group"
+                        className="hover:bg-[var(--bg-secondary)] transition-colors group"
                       >
                         {/* Roll Number column */}
                         <td className="px-6 py-4">
@@ -319,30 +389,24 @@ export default function StudentList() {
                           </div>
                         </td>
 
-                        {/* Trend Column (placeholder, unchanged UI) */}
+                        {/* Trend Column */}
                         <td className="px-6 py-4">
                           {trend > 0 ? (
                             <div className="flex items-center gap-1 text-xs font-semibold text-[var(--success)]">
                               <ArrowUpRight size={14} />
-                              +{trend}% {t('students.trend.vs_last_month')}
+                              <span>+{Math.abs(trend)}%</span>
                             </div>
                           ) : trend < 0 ? (
                             <div className="flex items-center gap-1 text-xs font-semibold text-[var(--danger)]">
                               <ArrowDownRight size={14} />
-                              {trend}% {t('students.trend.vs_last_month')}
+                              <span>-{Math.abs(trend)}%</span>
                             </div>
                           ) : (
-                            <div className="text-xs font-medium text-[var(--text-body)] opacity-70">
-                              {t('students.trend.no_change')}
+                            <div className="flex items-center gap-1 text-xs font-medium text-[var(--text-body)]/70">
+                              <span>—</span>
+                              <span>{t('students.trend.stable')}</span>
                             </div>
                           )}
-                        </td>
-
-                        {/* Actions Column */}
-                        <td className="px-6 py-4 text-right">
-                          <button className="text-[var(--text-body)]/50 hover:text-[var(--text-body)] p-1 hover:bg-[var(--bg-hover)] rounded-full transition">
-                            <MoreHorizontal size={20} />
-                          </button>
                         </td>
                       </tr>
                     );
@@ -390,7 +454,7 @@ export default function StudentList() {
 
           {/* Card 2: Top Performers */}
           {topPerformers.length > 0 && (
-            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-gray-100 shadow-sm">
+            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
               <h3 className="font-semibold text-[var(--text-main)] mb-1">{t('students.stats.top_performers')}</h3>
               <p className="text-xs text-[var(--text-body)] mb-4">{t('students.stats.top_performers_desc')}</p>
               
@@ -398,10 +462,10 @@ export default function StudentList() {
                 {topPerformers.map((s, i) => (
                   <div key={s._id} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">{i+1}</div>
-                      <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                      <div className="w-6 h-6 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center text-xs font-bold">{i+1}</div>
+                      <span className="text-sm font-medium text-[var(--text-body)]">{s.name}</span>
                     </div>
-                    <span className="text-sm font-bold text-gray-900">{s.attendancePercentage}%</span>
+                    <span className="text-sm font-bold text-[var(--text-main)]">{s.attendancePercentage}%</span>
                   </div>
                 ))}
               </div>
@@ -410,7 +474,7 @@ export default function StudentList() {
 
           {/* Card 3: Needs Support */}
           {needsSupport.length > 0 && (
-            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-gray-100 shadow-sm">
+            <div className="bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-color)] shadow-sm">
               <h3 className="font-semibold text-[var(--text-main)] mb-1">{t('students.stats.needs_support')}</h3>
               <p className="text-xs text-[var(--text-body)] mb-4">{t('students.stats.needs_support_desc')}</p>
               
@@ -418,10 +482,10 @@ export default function StudentList() {
                 {needsSupport.map((s, i) => (
                   <div key={s._id} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xs font-bold">{i+1}</div>
-                      <span className="text-sm font-medium text-gray-700">{s.name}</span>
+                      <div className="w-6 h-6 rounded-full bg-[var(--danger)]/10 text-[var(--danger)] flex items-center justify-center text-xs font-bold">{i+1}</div>
+                      <span className="text-sm font-medium text-[var(--text-body)]">{s.name}</span>
                     </div>
-                    <span className="text-sm font-bold text-gray-900">{s.attendancePercentage}%</span>
+                    <span className="text-sm font-bold text-[var(--text-main)]">{s.attendancePercentage}%</span>
                   </div>
                 ))}
               </div>
