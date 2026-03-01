@@ -244,7 +244,7 @@ async def confirm_attendance(payload: AttendanceConfirm):
     if not subject_id:
         raise HTTPException(status_code=400, detail="subject_id required")
 
-    att_date = selected_date if selected_date else date.today().isoformat()
+    att_date = selected_date.isoformat() if selected_date else date.today().isoformat()
     subject_oid = ObjectId(subject_id)
     present_oids = [ObjectId(sid) for sid in present_students]
     absent_oids = [ObjectId(sid) for sid in absent_students]

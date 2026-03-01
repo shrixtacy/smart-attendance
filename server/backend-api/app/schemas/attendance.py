@@ -19,7 +19,7 @@ class AttendanceOut(AttendanceCreate):
 
 class AttendanceConfirm(BaseModel):
     subject_id: str
-    date: str
+    date: date
     present_students: List[str]
     absent_students: List[str]
 
