@@ -13,6 +13,7 @@ from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
 from app.services.attendance import log_grouped_attendance
 from app.services.ml_client import ml_client
+from app.schemas.attendance import AttendanceConfirm
 from app.utils.geo import calculate_distance
 from app.schemas.attendance import QRAttendanceRequest
 from app.core.security import get_current_user
@@ -623,13 +624,14 @@ async def mark_attendance(request: Request, payload: Dict):
 
 
 @router.post("/confirm")
-async def confirm_attendance(payload: Dict):
+async def confirm_attendance(payload: AttendanceConfirm):
     """
     Confirm attendance for students after manual review
 
     payload:
     {
       "subject_id": "...",
+      "date": "2025-01-01",
       "present_students": ["id1", "id2", ...],
       "absent_students": ["id3", "id4", ...]
     }
@@ -638,13 +640,10 @@ async def confirm_attendance(payload: Dict):
     - present_updated / absent_updated are counts of unique IDs submitted
       after deduplication (not the count of DB rows modified).
     """
-    subject_oid = _parse_object_id(payload.get("subject_id"), "subject_id")
-    present_oids, present_set = _parse_object_id_list(
-        payload.get("present_students", []), "present_students"
-    )
-    absent_oids, absent_set = _parse_object_id_list(
-        payload.get("absent_students", []), "absent_students"
-    )
+    subject_id = payload.subject_id
+    present_students = payload.present_students
+    absent_students = payload.absent_students
+    selected_date = payload.date
 
     overlap = present_set.intersection(absent_set)
     if overlap:
@@ -657,72 +656,40 @@ async def confirm_attendance(payload: Dict):
     if not subject:
         raise HTTPException(status_code=404, detail="Subject not found")
 
-    today = date.today().isoformat()
+    att_date = selected_date.isoformat() if selected_date else date.today().isoformat()
+    subject_oid = ObjectId(subject_id)
+    present_oids = [ObjectId(sid) for sid in present_students]
+    absent_oids = [ObjectId(sid) for sid in absent_students]
 
-    # Mark PRESENT students - increment total AND present
-    if present_oids:
-        await db.subjects.update_one(
-            {"_id": subject_oid},
+    # Mark PRESENT students
+    await db.subjects.update_one(
+        {"_id": subject_oid},
+        {
+            "$inc": {"students.$[p].attendance.present": 1},
+            "$set": {"students.$[p].attendance.lastMarkedAt": att_date},
+        },
+        array_filters=[
             {
-                "$inc": {
-                    "students.$[p].attendance.total": 1,
-                    "students.$[p].attendance.present": 1,
-                },
-                "$set": {"students.$[p].attendance.lastMarkedAt": today},
-            },
-            array_filters=[
-                {
-                    "p.student_id": {"$in": present_oids},
-                    "p.attendance.lastMarkedAt": {"$ne": today},
-                }
-            ],
-        )
+                "p.student_id": {"$in": present_oids},
+                "p.attendance.lastMarkedAt": {"$ne": att_date},
+            }
+        ],
+    )
 
-    # Mark ABSENT students - increment total AND absent
-    if absent_oids:
-        await db.subjects.update_one(
-            {"_id": subject_oid},
+    # Mark ABSENT students
+    await db.subjects.update_one(
+        {"_id": subject_oid},
+        {
+            "$inc": {"students.$[a].attendance.absent": 1},
+            "$set": {"students.$[a].attendance.lastMarkedAt": att_date},
+        },
+        array_filters=[
             {
-                "$inc": {
-                    "students.$[a].attendance.total": 1,
-                    "students.$[a].attendance.absent": 1,
-                },
-                "$set": {"students.$[a].attendance.lastMarkedAt": today},
-            },
-            array_filters=[
-                {
-                    "a.student_id": {"$in": absent_oids},
-                    "a.attendance.lastMarkedAt": {"$ne": today},
-                }
-            ],
-        )
-
-    # Update percentage for all modified students
-    # Fetch the subject to get updated student records
-    updated_subject = await db.subjects.find_one({"_id": subject_oid}, {"students": 1})
-
-    if updated_subject:
-        # Calculate and update percentages for students with attendance marked
-        all_modified_student_ids = present_oids + absent_oids
-
-        for student in updated_subject.get("students", []):
-            student_id = student.get("student_id")
-            if student_id not in all_modified_student_ids:
-                continue
-
-            attendance = student.get("attendance", {})
-            total = attendance.get("total", 0)
-            present = attendance.get("present", 0)
-
-            # Calculate percentage
-            percentage = round((present / total) * 100, 2) if total > 0 else 0
-
-            # Update percentage in database
-            await db.subjects.update_one(
-                {"_id": subject_oid, "students.student_id": student_id},
-                {"$set": {"students.$[s].attendance.percentage": percentage}},
-                array_filters=[{"s.student_id": student_id}],
-            )
+                "a.student_id": {"$in": absent_oids},
+                "a.attendance.lastMarkedAt": {"$ne": att_date},
+            }
+        ],
+    )
 
     # --- Write daily attendance summary ---
     teacher_id = (
@@ -819,9 +786,9 @@ async def confirm_attendance(payload: Dict):
     await save_daily_summary(
         subject_id=subject_oid,
         teacher_id=teacher_id,
-        record_date=today,
-        present=total_present_today,
-        absent=absent_count,
+        record_date=att_date,
+        present=len(present_students),
+        absent=len(absent_students),
     )
 
     return {
