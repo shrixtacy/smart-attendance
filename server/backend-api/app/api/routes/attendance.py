@@ -11,6 +11,7 @@ from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD
 from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
 from app.services.ml_client import ml_client
+from app.schemas.attendance import AttendanceConfirm
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
@@ -223,25 +224,27 @@ async def mark_attendance(payload: Dict):
 
 
 @router.post("/confirm")
-async def confirm_attendance(payload: Dict):
+async def confirm_attendance(payload: AttendanceConfirm):
     """
     Confirm attendance for students after manual review
 
     payload:
     {
       "subject_id": "...",
+      "date": "2025-01-01",
       "present_students": ["id1", "id2", ...],
       "absent_students": ["id3", "id4", ...]
     }
     """
-    subject_id = payload.get("subject_id")
-    present_students: List[str] = payload.get("present_students", [])
-    absent_students: List[str] = payload.get("absent_students", [])
+    subject_id = payload.subject_id
+    present_students = payload.present_students
+    absent_students = payload.absent_students
+    selected_date = payload.date
 
     if not subject_id:
         raise HTTPException(status_code=400, detail="subject_id required")
 
-    today = date.today().isoformat()
+    att_date = selected_date if selected_date else date.today().isoformat()
     subject_oid = ObjectId(subject_id)
     present_oids = [ObjectId(sid) for sid in present_students]
     absent_oids = [ObjectId(sid) for sid in absent_students]
@@ -251,12 +254,12 @@ async def confirm_attendance(payload: Dict):
         {"_id": subject_oid},
         {
             "$inc": {"students.$[p].attendance.present": 1},
-            "$set": {"students.$[p].attendance.lastMarkedAt": today},
+            "$set": {"students.$[p].attendance.lastMarkedAt": att_date},
         },
         array_filters=[
             {
                 "p.student_id": {"$in": present_oids},
-                "p.attendance.lastMarkedAt": {"$ne": today},
+                "p.attendance.lastMarkedAt": {"$ne": att_date},
             }
         ],
     )
@@ -266,12 +269,12 @@ async def confirm_attendance(payload: Dict):
         {"_id": subject_oid},
         {
             "$inc": {"students.$[a].attendance.absent": 1},
-            "$set": {"students.$[a].attendance.lastMarkedAt": today},
+            "$set": {"students.$[a].attendance.lastMarkedAt": att_date},
         },
         array_filters=[
             {
                 "a.student_id": {"$in": absent_oids},
-                "a.attendance.lastMarkedAt": {"$ne": today},
+                "a.attendance.lastMarkedAt": {"$ne": att_date},
             }
         ],
     )
@@ -288,7 +291,7 @@ async def confirm_attendance(payload: Dict):
         class_id=subject_oid,
         subject_id=subject_oid,
         teacher_id=teacher_id,
-        record_date=today,
+        record_date=att_date,
         present=len(present_students),
         absent=len(absent_students),
     )
