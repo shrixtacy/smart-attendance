@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { 
   Bell, 
@@ -11,49 +11,91 @@ import {
   TrendingUp, 
   User,
   Menu,
-  QrCode
+  QrCode,
+  LogOut
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import StudentNavigation from "../components/StudentNavigation"
+import { fetchStudentTodaySchedule, fetchMySubjects } from "../../api/students";
+import { useEffect, useState } from "react";
 
 export default function StudentDashboard() {
   const { t, i18n } = useTranslation();
+  const [schedule, setSchedule] = useState([]);
+  const [subjectsInfo, setSubjectsInfo] = useState({ totalPresent: 0, totalClasses: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [tick, setTick] = useState(0);
+
+  // Force re-render to update relative time
+  useEffect(() => {
+    void tick; 
+  }, [tick]);
 
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
   };
 
-  // Mock Data for Today's Schedule
-  const schedule = [
-    {
-      id: 1,
-      subject: "Mathematics",
-      time: "09:00 - 09:50 AM",
-      status: "Present",
-      color: "green"
-    },
-    {
-      id: 2,
-      subject: "Physics",
-      time: "10:00 - 10:50 AM",
-      status: "Absent",
-      color: "red"
-    },
-    {
-      id: 3,
-      subject: "English Literature",
-      time: "11:10 - 12:00 PM",
-      status: "Upcoming",
-      color: "gray"
-    },
-    {
-      id: 4,
-      subject: "Computer Science",
-      time: "01:00 - 01:50 PM",
-      status: "Upcoming",
-      color: "gray"
-    },
-  ];
+  useEffect(() => {
+    // Force re-render every minute to update class status (Upcoming -> Live -> Completed)
+    const interval = setInterval(() => {
+      setTick(t => t + 1);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [scheduleData, subjectsData] = await Promise.all([
+          fetchStudentTodaySchedule(),
+          fetchMySubjects()
+        ]);
+        
+        // Fetch Schedule
+        setSchedule(scheduleData.classes || []);
+
+        // Fetch Subjects for overall attendance
+        const tClasses = (subjectsData || []).reduce((acc, sub) => acc + (sub.total || 0), 0);
+        const tPresent = (subjectsData || []).reduce((acc, sub) => acc + (sub.attended || 0), 0);
+        setSubjectsInfo({ totalClasses: tClasses, totalPresent: tPresent });
+
+      } catch (err) {
+        console.error("Failed to load data", err);
+        setError("Failed to load data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const formatTimeRange = (start, end) => {
+    if (!start || !end) return "";
+    const format = (timeStr) => {
+      const [h, m] = timeStr.split(":").map(Number);
+      const suffix = h >= 12 ? "PM" : "AM";
+      const hour12 = h % 12 || 12;
+      return `${hour12}:${m.toString().padStart(2, "0")} ${suffix}`;
+    };
+    return `${format(start)} - ${format(end)}`;
+  };
+
+  const getStatus = (start, end) => {
+    if (!start || !end) return "Upcoming";
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const [sh, sm] = start.split(":").map(Number);
+    const startMinutes = sh * 60 + sm;
+
+    const [eh, em] = end.split(":").map(Number);
+    const endMinutes = eh * 60 + em;
+
+    if (currentMinutes < startMinutes) return "Upcoming";
+    if (currentMinutes >= startMinutes && currentMinutes <= endMinutes) return "Live";
+    return "Completed";
+  };
 
   const currentDate = new Date().toLocaleDateString(i18n.language, {
     weekday: "long",
@@ -61,52 +103,52 @@ export default function StudentDashboard() {
     month: "long"
   });
 
-  const [username] = useState(() => {
-    try {
-      const stored = localStorage.getItem("user");
-      return stored ? JSON.parse(stored).name : "";
-    } catch {
-      return "";
-    }
-  });
+  const { totalClasses, totalPresent } = subjectsInfo;
+  const hasAttendanceData = totalClasses > 0;
+  const overallPercentage = hasAttendanceData ? Math.floor((totalPresent / totalClasses) * 100) : 0;
+  
+  // Calculate needed classes for 80% goal
+  const TARGET_PERCENTAGE = 0.80;
+  let rawNeeded = 0;
+  let classesNeeded = 0;
 
+  if (hasAttendanceData) {
+    // x = Math.ceil( (P * T - A) / (1 - P) )
+    rawNeeded = (TARGET_PERCENTAGE * totalClasses - totalPresent) / (1 - TARGET_PERCENTAGE);
+    classesNeeded = Math.max(0, Math.ceil(rawNeeded));
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row font-sans text-slate-800">
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col md:flex-row font-sans text-[var(--text-main)]">
 
       <StudentNavigation activePage="home" />
 
       {/* --- MAIN CONTENT AREA --- */}
-      <main className="flex-1 md:ml-64 pb-20 md:pb-8">
+      <main className="flex-1 md:ml-64 pb-20 md:pb-0">
 
         {/* Header */}
-        <header className="px-6 py-5 bg-white border-b border-gray-100 md:bg-transparent md:border-none sticky top-0 z-10 flex justify-between items-center">
-          <div>
-            <p className="text-xs text-gray-500 font-medium md:hidden">{t("student_dashboard.portal_name")}</p>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900">{t("student_dashboard.welcome", { name: username })}</h1>
-          </div>
-
+        <header className="px-6 py-5 bg-[var(--bg-card)] md:bg-transparent flex justify-end items-center">
           <div className="flex items-center gap-4">
             {/* Language Switcher */}
-            <div className="flex gap-2 items-center bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+            <div className="flex gap-2 items-center bg-[var(--bg-card)] px-3 py-1.5 rounded-full border border-[var(--border-color)] shadow-sm">
               <button 
                 onClick={() => changeLanguage("en")} 
-                className={`text-xs ${i18n.language === "en" ? "font-bold text-blue-900 border-b-2 border-blue-900" : "text-gray-400 hover:text-gray-600"}`}
+                className={`text-xs ${i18n.language === "en" ? "font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]" : "text-[var(--text-body)]/70 hover:text-[var(--text-body)]"}`}
               >
                 English
               </button>
-              <span className="text-gray-300 text-xs">|</span>
+              <span className="text-[var(--text-body)]/70 text-xs">|</span>
               <button 
                 onClick={() => changeLanguage("hi")} 
-                className={`text-xs ${i18n.language === "hi" ? "font-bold text-blue-900 border-b-2 border-blue-900" : "text-gray-400 hover:text-gray-600"}`}
+                className={`text-xs ${i18n.language === "hi" ? "font-bold text-[var(--primary)] border-b-2 border-[var(--primary)]" : "text-[var(--text-body)]/70 hover:text-[var(--text-body)]"}`}
               >
                 हिंदी
               </button>
             </div>
 
-            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition relative">
+            <button className="p-2 text-[var(--text-body)]/80 hover:bg-[var(--bg-secondary)] rounded-full transition relative">
               <Bell size={22} />
-              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+              <span className="absolute top-2 right-2.5 w-2 h-2 bg-[var(--danger)] rounded-full border border-[var(--bg-card)]"></span>
             </button>
           </div>
         </header>
@@ -117,118 +159,165 @@ export default function StudentDashboard() {
 
             {/* LEFT COLUMN: Stats Cards */}
             <div className="space-y-6">
+              {loading ? (
+                <>
+                  <div className="bg-[var(--bg-secondary)] rounded-3xl h-64 animate-pulse relative overflow-hidden"></div>
+                  <div className="bg-[var(--bg-secondary)] rounded-2xl h-24 animate-pulse"></div>
+                </>
+              ) : (
+                <>
+                  {/* Hero Card (Attendance) */}
+                  <div className="bg-[var(--action-info-bg)] rounded-3xl p-6 text-[var(--text-on-primary)] shadow-lg shadow-[var(--primary)]/20 relative overflow-hidden">
+                    {/* Background Decor */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--bg-card)] opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-[var(--primary-hover)] opacity-20 rounded-full -ml-5 -mb-5 blur-xl"></div>
 
-              {/* Hero Card (Attendance) */}
-              <div className="bg-blue-600 rounded-3xl p-6 text-white shadow-lg shadow-blue-200 relative overflow-hidden">
-                {/* Background Decor */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500 opacity-20 rounded-full -ml-5 -mb-5 blur-xl"></div>
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6">
+                        <div>
+                          <p className="text-[var(--text-on-primary)]/80 text-sm font-medium">{t("student.myAttendance")}</p>
+                          <h2 className="text-5xl font-bold mt-1">{overallPercentage}%</h2>
+                        </div>
+                        <span className="bg-[var(--bg-card)]/20 backdrop-blur-sm text-[var(--text-on-primary)] px-3 py-1 rounded-full text-xs font-semibold border border-[var(--bg-card)]/20">
+                          {overallPercentage >= 75 ? t("student_dashboard.stats.on_track") : t("student_dashboard.stats.at_risk")}
+                        </span>
+                      </div>
 
-                <div className="relative z-10">
-                  <div className="flex justify-between items-start mb-6">
-                    <div>
-                      <p className="text-blue-100 text-sm font-medium">{t("student.myAttendance")}</p>
-                      <h2 className="text-5xl font-bold mt-1">78%</h2>
-                    </div>
-                    <span className="bg-white/20 backdrop-blur-sm text-white px-3 py-1 rounded-full text-xs font-semibold border border-white/10">
-                      {t("student_dashboard.stats.on_track")}
-                    </span>
-                  </div>
+                      <div className="space-y-2">
+                        <p className="text-sm text-[var(--text-on-primary)]/85">{t("student_dashboard.stats.keep_attending")}</p>
+                        
+                        {/* Progress Bar */}
+                        <div className="h-2 bg-[var(--bg-card)]/30 rounded-full overflow-hidden flex relative">
+                          <div className={`h-full ${overallPercentage >= 75 ? 'bg-[var(--success)]' : 'bg-[var(--warning)]'} transition-all duration-500`} style={{ width: `${Math.min(overallPercentage, 100)}%` }}></div>
+                          {/* Safe Zone Marker */}
+                          <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--bg-card)] h-full z-10" style={{ left: '75%' }}></div>
+                        </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm text-blue-50">{t("student_dashboard.stats.keep_attending")}</p>
-                    
-                    {/* Progress Bar */}
-                    <div className="h-2 bg-black/20 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-emerald-400 w-[78%]"></div>
-                      <div className="h-full bg-white/30 flex-1 relative">
-                        {/* Safe Zone Marker */}
-                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-white h-full"></div>
+                        <div className="flex justify-between text-[10px] text-[var(--text-on-primary)]/70 font-medium uppercase tracking-wide mt-1">
+                          <span>{t("student_dashboard.stats.current")}: {overallPercentage}%</span>
+                          <div className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+                            <span>{t("student_dashboard.stats.safe_zone_label", { percent: 75 })}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-8">
+                        <Link
+                          to="/student-mark-qr"
+                          className="inline-flex items-center gap-2 bg-[var(--bg-card)] text-[var(--action-info-bg)] px-6 py-3 rounded-2xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-black/10"
+                        >
+                          <QrCode size={18} />
+                          {t('student_dashboard.mark_qr')}
+                        </Link>
                       </div>
                     </div>
+                  </div>
 
-                    <div className="flex justify-between text-[10px] text-blue-200 font-medium uppercase tracking-wide mt-1">
-                      <span>{t("student_dashboard.stats.current")}: 78%</span>
-                      <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        <span>{t("student_dashboard.stats.safe_zone_label", { percent: 75 })}</span>
+                  {/* Insight/Alert Card */}
+                  {!hasAttendanceData ? null : classesNeeded > 0 ? (
+                    <div className="bg-[var(--bg-card)] p-5 rounded-2xl border border-[var(--border-color)] shadow-sm flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center flex-shrink-0">
+                        <Shield size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[var(--text-main)]">{t("student_dashboard.stats.need_classes_title", { count: classesNeeded })}</h3>
+                        <p className="text-xs text-[var(--text-body)]/80 mt-1 leading-relaxed">
+                          {t("student_dashboard.stats.need_classes_desc", { count: classesNeeded, percent: TARGET_PERCENTAGE * 100 })}
+                        </p>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="mt-8">
-                    <Link
-                      to="/student-mark-qr"
-                      className="inline-flex items-center gap-2 bg-white text-blue-600 px-6 py-3 rounded-2xl font-bold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-blue-700/20"
-                    >
-                      <QrCode size={18} />
-                      Mark with QR
-                    </Link>
-                  </div>
-                </div>
-              </div>
-
-              {/* Insight/Alert Card */}
-              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-                  <Shield size={20} />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">{t("student_dashboard.stats.need_classes_title", { count: 3 })}</h3>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {t("student_dashboard.stats.need_classes_desc", { count: 3, percent: 80 })}
-                  </p>
-                </div>
-              </div>
-
+                  ) : (
+                    <div className="bg-[var(--bg-card)] p-5 rounded-2xl border border-[var(--border-color)] shadow-sm flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-full bg-[var(--success)]/10 text-[var(--success)] flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[var(--text-main)]">{t("student_dashboard.stats.target_achieved_title", "Target achieved!")}</h3>
+                        <p className="text-xs text-[var(--text-body)]/80 mt-1 leading-relaxed">
+                          {t("student_dashboard.stats.target_achieved_desc", { percent: TARGET_PERCENTAGE * 100, defaultValue: `You are currently above the ${TARGET_PERCENTAGE * 100}% target attendance. Maintain your streak!` })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* RIGHT COLUMN: Schedule List */}
             <div>
               <div className="flex justify-between items-end mb-4">
-                <h3 className="text-lg font-bold text-slate-800">{t("student_dashboard.schedule.today")}</h3>
-                <span className="text-xs font-medium text-gray-400">{currentDate}</span>
+                <h3 className="text-lg font-bold text-[var(--text-main)]">{t("student_dashboard.schedule.today")}</h3>
+                <span className="text-xs font-medium text-[var(--text-body)]/70">{currentDate}</span>
               </div>
 
               <div className="space-y-3">
-                {schedule.map((item) => (
-                  <div key={item.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-100 transition-colors">
-                    <div className="flex items-start gap-4">
-                      {/* Timeline Line Visual */}
-                      <div className="flex flex-col items-center gap-1 pt-1">
-                        <div className={`w-2 h-2 rounded-full ${item.status === "Present" ? "bg-emerald-500" : item.status === "Absent" ? "bg-rose-500" : "bg-slate-300"}`}></div>
-                        <div className="w-0.5 h-8 bg-gray-100 group-last:hidden"></div>
-                      </div>
+                {loading ? (
+                  <div className="text-center py-8 text-[var(--text-body)]/60 text-sm">{t('student_dashboard.schedule.loading')}</div>
+                ) : error ? (
+                   <div className="text-center py-8 text-[var(--danger)] text-sm">{t('student_dashboard.schedule.error')}</div>
+                ) : schedule.length === 0 ? (
+                  <div className="text-center py-8 text-[var(--text-body)]/60 text-sm">{t('student_dashboard.schedule.no_classes')}</div>
+                ) : (
+                  schedule.map((item) => {
+                    const status = getStatus(item.start_time, item.end_time);
+                    const timeRange = formatTimeRange(item.start_time, item.end_time);
 
-                      <div>
-                        <div className="flex items-center gap-2 text-[10px] text-gray-400 font-medium uppercase tracking-wide">
-                          <Clock size={10} />
-                          {item.time}
+                    return (
+                      <div key={item.id} className="bg-[var(--bg-card)] p-4 rounded-2xl border border-[var(--border-color)] shadow-sm flex items-center justify-between group hover:border-[var(--primary)]/20 transition-colors">
+                        <div className="flex items-start gap-4">
+                          {/* Timeline Line Visual */}
+                          <div className="flex flex-col items-center gap-1 pt-1">
+                            {/* Status Indicator Dot */}
+                            <div className={`w-2 h-2 rounded-full ${
+                              status === "Completed" ? "bg-[var(--success)]" : 
+                              status === "Live" ? "bg-[var(--warning)] animate-pulse" : 
+                              "bg-[var(--primary)]" // Upcoming
+                            }`}></div>
+                            <div className="w-0.5 h-8 bg-[var(--border-color)]/50 group-last:hidden"></div>
+                          </div>
+
+                          <div>
+                            <div className="flex items-center gap-2 text-[10px] text-[var(--text-body)]/70 font-medium uppercase tracking-wide">
+                              <Clock size={10} />
+                              {timeRange}
+                            </div>
+                            <h4 className="text-sm font-bold text-[var(--text-main)] mt-0.5">{item.subject_name}</h4>
+                            {item.room && <span className="text-xs text-[var(--text-body)]/60 block mt-0.5 flex items-center gap-1"><Home size={10}/> {t('student_dashboard.schedule.room', { room: item.room })}</span>}
+                          </div>
                         </div>
-                        <h4 className="text-sm font-bold text-slate-800 mt-0.5">{item.subject}</h4>
-                      </div>
-                    </div>
 
-                    {/* Status Pill */}
-                    <div>
-                      {item.status === "Present" && (
-                        <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">{t("student_dashboard.schedule.status_present")}</span>
-                      )}
-                      {item.status === "Absent" && (
-                        <span className="px-3 py-1 rounded-full bg-rose-100 text-rose-600 text-xs font-bold">{t("student_dashboard.schedule.status_absent")}</span>
-                      )}
-                      {item.status === "Upcoming" && (
-                        <span className="px-3 py-1 rounded-full bg-gray-100 text-gray-500 text-xs font-bold">{t("student_dashboard.schedule.status_upcoming")}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        {/* Status Pill */}
+                        <div>
+                          {status === "Completed" && (
+                            <span className="px-3 py-1 rounded-full bg-[var(--success)]/15 text-[var(--success)] text-xs font-bold">{t('student_dashboard.schedule.status_completed')}</span>
+                          )}
+                          {status === "Live" && (
+                            <span className="px-3 py-1 rounded-full bg-[var(--warning)]/15 text-[var(--warning)] text-xs font-bold">{t('student_dashboard.schedule.status_live')}</span>
+                          )}
+                          {status === "Upcoming" && (
+                            <span className="px-3 py-1 rounded-full bg-[var(--bg-secondary)] text-[var(--text-body)]/80 text-xs font-bold">{t("student_dashboard.schedule.status_upcoming")}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* Empty State / End of List Decor */}
-              <div className="text-center mt-6">
-                <p className="text-xs text-gray-400">{t("student_dashboard.schedule.all_caught_up")}</p>
-              </div>
+              {schedule &&
+                schedule.length > 0 &&
+                schedule.every(
+                  (item) =>
+                    getStatus(item.start_time, item.end_time) === "Completed"
+                ) && (
+                  <div className="text-center mt-6">
+                    <p className="text-xs text-[var(--text-body)]/70">
+                      {t("student_dashboard.schedule.all_caught_up")}
+                    </p>
+                  </div>
+                )}
             </div>
 
           </div>

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Send,
 } from "lucide-react";
+import { forgotPassword, resetPassword } from "../api/auth";
 
 // Regex Patterns
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
@@ -76,23 +77,32 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
-    // Simulate API call to send OTP
-    await new Promise((resolve) => window.setTimeout(resolve, 1000));
-    setLoading(false);
-
-    setStep(2);
-    setResendCooldown(30);
-    setSuccess(t('forgot_password.alerts.code_sent', { email }));
+    try {
+      await forgotPassword(normalizedEmail);
+      setEmail(normalizedEmail); // IMPORTANT: lock normalized value
+      setStep(2);
+      setResendCooldown(30);
+      setSuccess(t('forgot_password.alerts.code_sent', { normalizedEmail }));
+    } catch (err) {
+      setError(err.response?.data?.detail || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Step 2: Resend OTP (Only updates timer/message, stays on step 2)
   const handleResend = async () => {
     clearMessages();
-    setLoading(true); // Reuse loading state or create specific one
-    await new Promise((resolve) => window.setTimeout(resolve, 800));
-    setLoading(false);
-    setResendCooldown(30);
-    setSuccess(t('forgot_password.alerts.otp_sent'));
+    setLoading(true);
+    try {
+      await forgotPassword(normalizedEmail);
+      setResendCooldown(30);
+      setSuccess(t('forgot_password.alerts.otp_sent'));
+    } catch (err) {
+      setError(err.response?.data?.detail || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Step 3: Final Reset
@@ -114,15 +124,18 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
-    // Simulate API call to reset password
-    await new Promise((resolve) => window.setTimeout(resolve, 1500));
-    setLoading(false);
-
-    setSuccess(t('forgot_password.alerts.success'));
-    setOtp("");
-    setNewPassword("");
-    setConfirmPassword("");
-    // Here you would typically redirect to login
+    try {
+      await resetPassword(normalizedEmail, otp, newPassword);
+      setSuccess(t('forgot_password.alerts.success'));
+      setOtp("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      // Specifically handle OTP errors here
+      setError(err.response?.data?.detail || t('common.error'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Master Submit Handler (Handles Enter Key)
@@ -142,7 +155,7 @@ export default function ForgotPassword() {
     }
     if (step > targetStep) {
       // Completed steps
-      return "bg-green-500 text-white border-green-500";
+      return "bg-[var(--success)] text-[var(--text-on-primary)] border-[var(--success)]";
     }
     return "bg-transparent text-[var(--text-body)] border-[var(--border-color)]";
   };
@@ -250,7 +263,7 @@ export default function ForgotPassword() {
                   onClick={handleSendOtp}
                   disabled={!isEmailValid || loading}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-[var(--primary)] p-2 text-[var(--text-on-primary)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[var(--bg-secondary)] disabled:text-[var(--text-body)]"
-                  title="Send verification code"
+                  title={t("forgot_password.send_code_title")}
                 >
                   {loading ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -394,7 +407,7 @@ export default function ForgotPassword() {
           {error && (
             <div
               role="alert"
-              className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400"
+              className="flex items-start gap-2 rounded-xl border border-[var(--danger)]/25 bg-[var(--danger)]/10 px-3 py-2.5 text-sm text-[var(--danger)]"
             >
               <span className="mt-0.5">⚠️</span>
               <span>{error}</span>
@@ -404,7 +417,7 @@ export default function ForgotPassword() {
           {success && (
             <div
               role="status"
-              className="flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5 text-sm text-green-600 dark:border-green-900/30 dark:bg-green-900/20 dark:text-green-400"
+              className="flex items-start gap-2 rounded-xl border border-[var(--success)]/25 bg-[var(--success)]/10 px-3 py-2.5 text-sm text-[var(--success)]"
             >
               <CircleCheck size={16} className="mt-0.5 shrink-0" />
               <span>{success}</span>

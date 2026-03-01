@@ -21,15 +21,20 @@ import {
   TreePine,
 } from "lucide-react";
 import SettingsSidebar from "../components/SettingsSidebar";
+import LogoutConfirmDialog from "../components/LogoutConfirmDialog";
 import { useTheme } from "../theme/ThemeContext";
 import {
   getSettings,
   patchSettings,
   uploadAvatar,
   addSubject,
+  sendLowAttendanceNotice,
 } from "../api/settings";
+import { logout as apiLogout } from "../api/auth";
 import AddSubjectModal from "../components/AddSubjectModal";
 import { useTranslation } from "react-i18next";
+import toast from "react-hot-toast";
+import { requestNotificationPermission, getNotificationPermissionState, showSystemNotification } from "../utils/notificationService";
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -47,10 +52,10 @@ export default function Settings() {
     const handleUp = () => setDragging(null);
     const handleMove = (e) => {
       if (!dragging || !sliderRef.current) return;
-      
+
       const rect = sliderRef.current.getBoundingClientRect();
       const percent = Math.min(Math.max(0, ((e.clientX - rect.left) / rect.width) * 100), 100);
-      
+
       if (dragging === 'warning') {
         const newVal = Math.round(percent);
         // Ensure warning doesn't cross safe
@@ -65,12 +70,12 @@ export default function Settings() {
         }
       }
     };
-    
+
     if (dragging) {
       window.addEventListener('mousemove', handleMove);
       window.addEventListener('mouseup', handleUp);
     }
-    
+
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
@@ -83,14 +88,15 @@ export default function Settings() {
 
   // Notifications
   const [notifications, setNotifications] = useState({
-    push: true,
-    inApp: true,
+    push: false,
+    inApp: false,
     sound: false,
   });
 
   // State for Face Settings
   const [liveness, setLiveness] = useState(true);
   const [sensitivity, setSensitivity] = useState(80);
+  const sensitivityTimeoutRef = useRef(null);
 
   // State for email preff
   const [_emailPreferences, setEmailPreferences] = useState(false);
@@ -114,9 +120,52 @@ export default function Settings() {
     }
   }, [activeTab]);
 
+  // Handler to toggle email preferences
+  const toggleEmailPref = (key) => {
+    setEmailPreferences((prev) => {
+      // If array doesn't exist, create it
+      const currentPrefs = Array.isArray(prev) ? [...prev] : [];
+      const existingIndex = currentPrefs.findIndex((p) => p.key === key);
+
+      if (existingIndex >= 0) {
+        // Toggle existing
+        currentPrefs[existingIndex] = {
+          ...currentPrefs[existingIndex],
+          enabled: !currentPrefs[existingIndex].enabled
+        };
+      } else {
+        // Add new (default to true if adding, but logic suggests we are enabling it)
+        currentPrefs.push({ key, enabled: true });
+      }
+      return currentPrefs;
+    });
+  };
+
   // --- helper functions (inside your component) ---
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [sendingNotice, setSendingNotice] = useState(false);
+  const [noticeResult, setNoticeResult] = useState(null);
+
+  async function handleSendLowAttendanceNotice() {
+    setSendingNotice(true);
+    setNoticeResult(null);
+    try {
+      const res = await sendLowAttendanceNotice();
+      setNoticeResult({
+        success: true,
+        message: res.message || t('settings.notices.sent_successfully'),
+      });
+    } catch (err) {
+      const errorMsg =
+        err?.response?.data?.detail ||
+        err.message ||
+        t('settings.notices.failed');
+      setNoticeResult({ success: false, message: errorMsg });
+    } finally {
+      setSendingNotice(false);
+    }
+  }
 
   // compute initials for avatar fallback
   function getInitials(name) {
@@ -128,11 +177,28 @@ export default function Settings() {
       .join("");
   }
   const navigate = useNavigate();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   function handleLogout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
-  navigate("/login");
+    setShowLogoutConfirm(true);
+  }
+
+  async function confirmLogout() {
+    try {
+      await apiLogout();
+    } catch (error) {
+      // Log error for debugging but continue with logout
+      if (import.meta.env.DEV) {
+        console.error("Logout API call failed:", error);
+      }
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("refresh_token");
+      setShowLogoutConfirm(false);
+      toast.success(t('settings.logout_success'));
+      navigate("/login");
+    }
   }
 
 
@@ -180,11 +246,28 @@ export default function Settings() {
 
         setTheme(data?.theme ?? data?.settings?.theme ?? "Light");
 
+        // Force defaults to FALSE unless explicitly set to TRUE in DB *AND* browser permission allows
+        const dbPush = data?.settings?.notifications?.push ?? false;
+        const dbInApp = data?.settings?.notifications?.inApp ?? false;
+        const dbSound = data?.settings?.notifications?.sound ?? false;
+
         setNotifications({
-          push: data?.settings?.notifications?.push ?? true,
-          inApp: data?.settings?.notifications?.inApp ?? true,
-          sound: data?.settings?.notifications?.sound ?? false,
+          push: dbPush,
+          inApp: dbInApp,
+          sound: dbSound,
         });
+
+        // Sync with browser permission state (System-level override)
+        if ("Notification" in window) {
+           if (Notification.permission !== 'granted') {
+             // If browser denied/default, force toggles off to reflect reality
+             setNotifications(prev => ({ 
+               ...prev, 
+               push: false,
+               sound: false // Sound is often tied to notifications, so disable if not permitted
+             }));
+           }
+        }
 
         setEmailPreferences(data?.settings?.emailPreferences ?? []);
 
@@ -236,6 +319,7 @@ export default function Settings() {
             liveness,
             sensitivity,
           },
+          emailPreferences: _emailPreferences,
           theme,
         },
       };
@@ -295,6 +379,80 @@ export default function Settings() {
     }
   }
 
+  // Debounced sensitivity handler
+  const handleSensitivityChange = (value) => {
+    setSensitivity(value);
+    
+    // Clear previous timeout
+    if (sensitivityTimeoutRef.current) {
+      clearTimeout(sensitivityTimeoutRef.current);
+    }
+    
+    // Set new timeout to update after user stops dragging
+    sensitivityTimeoutRef.current = setTimeout(() => {
+      // Auto-save could be triggered here if needed
+      // For now, it will be saved when user clicks "Apply Changes"
+    }, 500);
+  };
+
+  // Handles
+  const handlePushToggle = async () => {
+    const nextState = !notifications.push;
+    
+    if (nextState) {
+      // User wants to turn ON notification permission
+      const granted = await requestNotificationPermission();
+      
+      if (granted) {
+        setNotifications(prev => ({ ...prev, push: true }));
+        toast.success(t('settings.notifications.enabled') || "Notifications enabled");
+        // Also ensure sound is enabled by default if permission granted? Maybe user choice.
+      } else {
+        // Permission denied or dismissed
+        setNotifications(prev => ({ ...prev, push: false }));
+        toast.error(t('settings.notifications.permission_denied') || "Notification permission denied");
+      }
+    } else {
+      // User turning OFF
+      setNotifications(prev => ({ ...prev, push: false }));
+    }
+  };
+
+  const handleSoundToggle = async () => {
+    const nextState = !notifications.sound;
+    
+    if (nextState) {
+      // Sound requires notification permission too, often
+      const granted = await requestNotificationPermission();
+      
+      if (granted) {
+        // Also request audio unlock if possible (from previous request logic, for consistency)
+        try {
+             // Just trigger audio context briefly or getUserMedia to permit audio playback
+             // This ensures "Sound effects" work reliably
+             const AudioContext = window.AudioContext || window.webkitAudioContext;
+             if (AudioContext) {
+                 const ctx = new AudioContext();
+                 const osc = ctx.createOscillator();
+                 const gain = ctx.createGain();
+                 osc.connect(gain);
+                 gain.connect(ctx.destination);
+                 gain.gain.value = 0.001; // Silent
+                 osc.start();
+                 setTimeout(() => { osc.stop(); ctx.close(); }, 100);
+             }
+        } catch(e) { console.error("Audio unlock failed", e); }
+
+        setNotifications(prev => ({ ...prev, sound: true }));
+      } else {
+        setNotifications(prev => ({ ...prev, sound: false }));
+        toast.error(t('settings.notifications.permission_denied') || "Notification permission required for sound");
+      }
+    } else {
+       setNotifications(prev => ({ ...prev, sound: false }));
+    }
+  };
+
   // UI: show a simple loading state until data is loaded
   if (!loaded) {
     return <div className="p-6">Loading settings…</div>;
@@ -302,34 +460,35 @@ export default function Settings() {
 
   if (loadError)
     return (
-      <div className="p-6 text-rose-600">
-        {t('settings.alerts.load_failed', {error: loadError})}
+      <div className="p-6 text-[var(--danger)]">
+        {t('settings.alerts.load_failed', { error: loadError })}
       </div>
     );
-  
+
   const emailPreferencesList = [
-      { key: "settings.general.email_daily", label: "Daily attendance summary" },
-      { key: "settings.general.email_critical", label: "Critical attendance alerts" },
-      { key: "settings.general.email_updates", label: "Product updates" },
+    { key: "settings.general.email_daily", label: "Daily attendance summary" },
+    { key: "settings.general.email_critical", label: "Critical attendance alerts" },
+    { key: "settings.general.email_updates", label: "Product updates" },
+    { key: "settings.general.email_low_attendance_automated", label: "Automated Monthly Low Attendance Alerts" },
   ];
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)]">
-      <div className="max-w-7xl mx-auto p-6 md:p-8 space-y-8 animate-in fade-in duration-500">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 animate-in fade-in duration-500">
         {/* Page Header */}
         <div>
-          <h2 className="text-2xl font-bold text-[var(--text-main)]">
-            {t('settings.title', {name: profile?.name || "User"})}
+          <h2 className="text-xl sm:text-2xl font-bold text-[var(--text-main)]">
+            {t('settings.title', { name: profile?.name || "User" })}
           </h2>
-          <p className="text-[var(--text-body)] opacity-90 mt-1">
+          <p className="text-sm sm:text-base text-[var(--text-body)] opacity-90 mt-1">
             {t('settings.subtitle')}
           </p>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab } onLogout={handleLogout}/>
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start">
+          <SettingsSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
 
-          <div className="flex-1 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-8 w-full min-h-[600px]">
+          <div className="flex-1 bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-4 sm:p-6 md:p-8 w-full min-h-[500px] sm:min-h-[600px]">
             {/* ================= GENERAL TAB ================= */}
             {activeTab === "general" && (
               <div className="space-y-8">
@@ -347,22 +506,22 @@ export default function Settings() {
                   <label className="text-sm font-semibold text-[var(--text-main)]">
                     {t('settings.general.theme')}
                   </label>
-                  <div className="flex gap-4">
+                  <div className="grid grid-cols-2 sm:flex gap-2 sm:gap-4">
                     {["Light", "Dark", "Forest", "Cyber"].map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setTheme(mode)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-xl border font-medium transition-all ${
-                          theme === mode
-                            ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
-                            : "border-[var(--border-color)] hover:bg-[var(--bg-hover)] text-[var(--text-body)]"
-                        }`}
+                        className={`flex items-center justify-center sm:justify-start gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl border font-medium transition-all text-sm sm:text-base ${theme === mode
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]"
+                          : "border-[var(--border-color)] hover:bg-[var(--bg-secondary)] text-[var(--text-body)]"
+                          }`}
+
                       >
                         {mode === "Light" && <Sun size={18} />}
                         {mode === "Dark" && <Moon size={18} />}
                         {mode === "Forest" && <TreePine size={18} />}
                         {mode === "Cyber" && <Monitor size={18} />}
-                        {mode}
+                        <span className="hidden xs:inline">{mode}</span>
                       </button>
                     ))}
                   </div>
@@ -392,12 +551,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <button
-                      onClick={() =>
-                        setNotifications({
-                          ...notifications,
-                          push: !notifications.push,
-                        })
-                      }
+                      onClick={handlePushToggle}
                       className={`w-12 h-6 rounded-full transition-colors relative ${notifications.push ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
                       <div
@@ -422,12 +576,7 @@ export default function Settings() {
                       </div>
                     </div>
                     <button
-                      onClick={() =>
-                        setNotifications({
-                          ...notifications,
-                          sound: !notifications.sound,
-                        })
-                      }
+                      onClick={handleSoundToggle}
                       className={`w-12 h-6 rounded-full transition-colors relative ${notifications.sound ? "bg-[var(--primary)]" : "bg-[var(--border-color)]"}`}
                     >
                       <div
@@ -451,7 +600,11 @@ export default function Settings() {
                         <div className="w-5 h-5 rounded border border-[var(--border-color)] flex items-center justify-center text-[var(--text-on-primary)] group-hover:border-[var(--primary)] bg-[var(--bg-card)] group-hover:shadow-sm transition-all has-[:checked]:bg-[var(--primary)] has-[:checked]:border-[var(--primary)]">
                           <input
                             type="checkbox"
-                            defaultChecked={idx < 2}
+                            checked={
+                              Array.isArray(_emailPreferences) &&
+                              _emailPreferences.find((p) => p.key === item.key)?.enabled === true
+                            }
+                            onChange={() => toggleEmailPref(item.key)}
                             className="hidden"
                           />
                           <Check size={14} />
@@ -464,15 +617,39 @@ export default function Settings() {
                   </div>
                 </div>
 
+                {/* Manual Low Attendance Notice */}
+                <div className="space-y-4">
+                  <label className="text-sm font-semibold text-[var(--text-main)]">
+                    Manual Actions
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handleSendLowAttendanceNotice}
+                      disabled={sendingNotice}
+                      className="px-6 py-2.5 rounded-xl text-sm font-semibold bg-[var(--danger,#ef4444)] text-white hover:opacity-90 shadow-md disabled:opacity-50"
+                    >
+                      {sendingNotice ? t('settings.notices.sending') : t('settings.notices.send_low_attendance')}
+                    </button>
+                    {noticeResult && (
+                      <span className={`text-sm ${noticeResult.success ? "text-green-600" : "text-[var(--danger,#ef4444)]"}`}>
+                        {noticeResult.message}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[var(--text-body)] opacity-90">
+                    Manually send low attendance warning emails to students with less than 75% attendance in your subjects.
+                  </p>
+                </div>
+
                 {/* Footer Buttons */}
-                <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)]">
+                <div className="pt-6 flex flex-col-reverse sm:flex-row justify-end gap-3 border-t border-[var(--border-color)]">
+                  <button className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)]">
                     {t('settings.general.cancel')}
                   </button>
-                  <button 
+                  <button
                     onClick={saveProfile}
                     disabled={saving}
-                    className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md disabled:opacity-50"
+                    className="w-full sm:w-auto px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md disabled:opacity-50"
                   >
                     {saving ? t('settings.general.saving') : t('settings.general.save')}
                   </button>
@@ -492,7 +669,7 @@ export default function Settings() {
                   </p>
                 </div>
 
-                <div className="p-8 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] space-y-8 shadow-sm">
+                <div className="p-4 sm:p-8 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] space-y-6 sm:space-y-8 shadow-sm">
                   <div className="flex justify-between items-end border-b border-[var(--border-color)] pb-4">
                     <label className="text-base font-semibold text-[var(--text-main)]">
                       {t('settings.thresholds.ranges')}
@@ -507,7 +684,7 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div 
+                  <div
                     className="relative py-8 select-none px-2"
                     ref={sliderRef}
                   >
@@ -581,10 +758,10 @@ export default function Settings() {
                   </div>
 
                   <div className="pt-8 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer">
+                    <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
                       {t('settings.general.cancel')}
                     </button>
-                    <button 
+                    <button
                       onClick={saveProfile}
                       disabled={saving}
                       className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"
@@ -613,8 +790,8 @@ export default function Settings() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-6 p-6 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)]">
-                  <div className="w-20 h-20 bg-[var(--bg-hover)] rounded-full flex items-center justify-center text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden">
+                <div className="flex items-center gap-4 sm:gap-6 p-4 sm:p-6 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] flex-col sm:flex-row text-center sm:text-left">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-[var(--bg-secondary)] rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold text-[var(--text-body)] opacity-90 border-4 border-[var(--border-color)] shadow-sm overflow-hidden flex-shrink-0">
                     {profile.avatarUrl ? (
                       <img
                         src={profile.avatarUrl}
@@ -625,15 +802,15 @@ export default function Settings() {
                       <span>{getInitials(profile.name)}</span>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-lg font-bold text-[var(--text-main)]">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-lg font-bold text-[var(--text-main)] truncate">
                       {profile.name || "-"}
                     </h4>
-                    <p className="text-sm text-[var(--text-body)] opacity-90">
+                    <p className="text-sm text-[var(--text-body)] opacity-90 truncate">
                       {profile.branch?.toUpperCase() || "Department of Science"}
                     </p>{" "}
                   </div>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] transition shadow-sm cursor-pointer">
+                  <label className="flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] transition shadow-sm cursor-pointer w-full sm:w-auto justify-center">
                     <Upload size={16} />
                     <span>{t('settings.profile.change_photo')}</span>
                     <input
@@ -761,7 +938,7 @@ export default function Settings() {
                         }
                       })();
                     }}
-                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer"
                   >
                     {t('settings.general.cancel')}
                   </button>
@@ -790,27 +967,7 @@ export default function Settings() {
                   </p>
                 </div>
 
-                {/* 1. Enrolment Status */}
-                <div className="p-6 border border-[var(--border-color)] rounded-xl bg-[var(--bg-secondary)] flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-[var(--success)]/10 text-[var(--success)] rounded-full flex items-center justify-center">
-                      <Camera size={28} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-[var(--text-main)]">
-                        {t('settings.face_settings.face_data')}
-                      </h4>
-                      <p className="text-sm text-[var(--text-body)] opacity-70">
-                        {t('settings.face_settings.last_updated')}
-                      </p>
-                    </div>
-                  </div>
-                  <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-body)] rounded-lg text-sm font-medium hover:bg-[var(--bg-hover)] shadow-sm flex items-center gap-2 cursor-pointer">
-                    <RefreshCw size={16} /> {t('settings.face_settings.recalibrate')}
-                  </button>
-                </div>
-
-                {/* 2. Recognition Sensitivity Slider */}
+                {/* Recognition Sensitivity Slider */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-semibold text-[var(--text-main)]">
@@ -825,7 +982,7 @@ export default function Settings() {
                     min="50"
                     max="99"
                     value={sensitivity}
-                    onChange={(e) => setSensitivity(e.target.value)}
+                    onChange={(e) => handleSensitivityChange(e.target.value)}
                     className="w-full h-2 bg-[var(--bg-secondary)] rounded-lg appearance-none cursor-pointer accent-[var(--primary)]"
                   />
                   <p className="text-xs text-[var(--text-body)] opacity-90">
@@ -864,32 +1021,12 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* 4. Danger Zone */}
-                <div className="pt-6 border-t border-[var(--border-color)]">
-                  <h4 className="text-sm font-bold text-[var(--danger)] mb-4">
-                    {t('settings.face_settings.danger_zone')}
-                  </h4>
-                  <div className="flex items-center justify-between p-4 bg-[var(--danger)]/10 border border-[var(--danger)]/20 rounded-xl">
-                    <div>
-                      <h5 className="text-sm font-semibold text-[var(--danger)]">
-                        {t('settings.face_settings.reset_model')}
-                      </h5>
-                      <p className="text-xs text-[var(--danger)] mt-1">
-                       {t('settings.face_settings.reset_desc')}
-                      </p>
-                    </div>
-                    <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--danger)]/20 text-[var(--danger)] rounded-lg text-sm font-medium hover:bg-[var(--danger)]/20 transition shadow-sm flex items-center gap-2 cursor-pointer">
-                      <Trash2 size={16} /> {t('settings.face_settings.reset_data')}
-                    </button>
-                  </div>
-                </div>
-
                 {/* Footer Buttons */}
                 <div className="pt-6 flex justify-end gap-3 border-t border-[var(--border-color)]">
-                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] cursor-pointer">
+                  <button className="px-6 py-2.5 rounded-xl text-sm font-medium text-[var(--text-body)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] cursor-pointer">
                     {t('settings.face_settings.discard')}
                   </button>
-                  <button 
+                  <button
                     onClick={saveProfile}
                     disabled={saving}
                     className="px-8 py-2.5 rounded-xl text-sm font-semibold bg-[var(--primary)] text-[var(--text-on-primary)] hover:bg-[var(--primary-hover)] shadow-md cursor-pointer disabled:opacity-50"
@@ -977,6 +1114,20 @@ export default function Settings() {
           </div>
         </div>
       </div>
+
+      {/* Logout Confirmation Dialog */}
+      <LogoutConfirmDialog
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={confirmLogout}
+      />
+
+      {showSubjectModal && (
+        <AddSubjectModal
+          onClose={() => setShowSubjectModal(false)}
+          onSave={handleAddSubject}
+        />
+      )}
     </div>
   );
 }

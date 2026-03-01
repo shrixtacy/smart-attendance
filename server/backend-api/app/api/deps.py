@@ -48,7 +48,25 @@ async def get_current_teacher(
 
     user = await db.users.find_one({"_id": oid})
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=401, detail="User not found")
+
+    # Validate session if session_id is present in token
+    session_id = payload.get("session_id")
+    if session_id:
+        # Import locally to avoid circular import issues
+        from app.utils.jwt_token import hash_session_id
+
+        stored_session_hash = user.get("current_active_session")
+        if not stored_session_hash or stored_session_hash != hash_session_id(
+            session_id
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail=(
+                    "SESSION_CONFLICT: You have been logged out because "
+                    "this account was logged in on another device"
+                ),
+            )
 
     teacher = await db.teachers.find_one(
         {

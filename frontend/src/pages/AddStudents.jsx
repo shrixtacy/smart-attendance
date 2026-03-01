@@ -14,9 +14,11 @@ import {
   ChevronDown,
   Check,
   X,
-  User
+  User,
+  Loader2
 } from "lucide-react";
 import { fetchMySubjects, fetchSubjectStudents, verifyStudent, deleteStudent } from "../api/teacher";
+import ConfirmationModal from "../components/ConfirmationModal";
 
 export default function AddStudents() {
   const { t } = useTranslation();
@@ -24,6 +26,9 @@ export default function AddStudents() {
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [students, setStudents] = useState([]);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isVerifyAllModalOpen, setIsVerifyAllModalOpen] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
 
 
@@ -43,20 +48,65 @@ export default function AddStudents() {
       if (filterType === "Unverified only") return s.verified === false;
       return true;
     })
-    .map((s) => ({
-      id: s.student_id,
-      name: s.name,
-      roll: s.roll,           
-      year: s.year,           
-      branch: s.branch.toUpperCase(),
-      status: s.verified ? t('add_students.status_verified', "Verified") : t('add_students.status_unverified', "Unverified"),
-      addedTime: t('add_students.added_time', { time: "Just now", defaultValue: "Just now" }), // "Just now" could also be translated if dynamic
-      avatar: s.avatar,
-      hasImage: true,
-      actionType: s.verified ? "none" : "verify"
-  }));
+    .map((s) => {
+      const hasAvatar = s.avatar && s.avatar.trim() !== '';
+      let status;
+      if (s.verified) {
+        status = 'verified';
+      } else if (hasAvatar) {
+        status = 'ready_to_verify';
+      } else {
+        status = 'waiting_image';
+      }
+      
+      return {
+        id: s.student_id,
+        name: s.name,
+        roll: s.roll,           
+        year: s.year,           
+        branch: s.branch.toUpperCase(),
+        status: status,
+        addedTime: t('add_students.added_time', { time: "Just now", defaultValue: "Just now" }),
+        avatar: s.avatar,
+        hasImage: hasAvatar,
+        verified: s.verified
+      };
+    });
 
-  const unverifiedCount = filteredStudents.filter(s => s.status === t('add_students.status_unverified', "Unverified")).length;
+  const unverifiedCount = filteredStudents.filter(s => s.status === 'ready_to_verify' || s.status === 'waiting_image').length;
+
+  const handleRefresh = async () => {
+    if(!selectedSubject) return;
+    setIsRefreshing(true);
+    try {
+      await fetchSubjectStudents(selectedSubject).then(setStudents);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleVerifyAllVisible = () => {
+    const studentsToVerify = filteredStudents.filter(s => !s.verified && s.hasImage);
+    if (studentsToVerify.length === 0) return;
+    setIsVerifyAllModalOpen(true);
+  };
+
+  const confirmVerifyAll = async () => {
+    const studentsToVerify = filteredStudents
+      .filter(s => !s.verified && s.hasImage)
+      .map(s => s.id);
+    
+    setIsVerifying(true);
+    try {
+      await Promise.all(studentsToVerify.map(id => verifyStudent(selectedSubject, id)));
+      await fetchSubjectStudents(selectedSubject).then(setStudents);
+      setIsVerifyAllModalOpen(false);
+    } catch (error) {
+      console.error("Batch verify failed", error);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const handleVerify = async (studentId) => {
     if (!confirm(t('add_students.confirm_verify', "Verify this student for attendance?"))) return;
@@ -93,11 +143,19 @@ export default function AddStudents() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-body)] rounded-lg text-sm font-medium hover:bg-[var(--bg-hover)] flex items-center gap-2 transition shadow-sm">
-              <RefreshCw size={16} />
+            <button 
+              onClick={handleRefresh}
+              disabled={!selectedSubject || isRefreshing}
+              className="px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-body)] rounded-lg text-sm font-medium hover:bg-[var(--bg-secondary)] flex items-center gap-2 transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} />
               {t('add_students.refresh', "Refresh")}
             </button>
-            <button className="px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] flex items-center gap-2 shadow-md transition">
+            <button 
+              onClick={handleVerifyAllVisible}
+              disabled={!selectedSubject}
+              className="px-4 py-2 bg-[var(--action-info-bg)] text-[var(--text-on-primary)] rounded-lg text-sm font-medium hover:bg-[var(--primary-hover)] flex items-center gap-2 shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <CheckCircle size={16} />
               {t('add_students.verify_all', "Verify all visible")}
             </button>
@@ -198,7 +256,7 @@ export default function AddStudents() {
               </thead>
               <tbody className="divide-y divide-[var(--border-color)]">
                 {filteredStudents.map((student) => (
-                  <tr key={student.id} className="hover:bg-[var(--bg-hover)] transition-colors group">
+                  <tr key={student.id} className="hover:bg-[var(--bg-secondary)] transition-colors group">
 
                     <td className="px-6 py-4 text-sm font-medium text-[var(--text-body)]">{student.roll}</td>
                     <td className="px-6 py-4">
@@ -213,21 +271,26 @@ export default function AddStudents() {
                     <td className="px-6 py-4 text-sm text-[var(--text-body)]">{student.year}</td>
                     <td className="px-6 py-4 text-sm text-[var(--text-main)] max-w-[200px]">{student.branch}</td>
                     <td className="px-6 py-4">
-                      {student.status === t('add_students.status_unverified', "Unverified") ? (
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/30">
-                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)]"></span>
-                           {t('add_students.status_unverified', "Unverified")}
-                         </span>
+                      {student.status === 'verified' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--success)]/10 text-[var(--success)] border border-[var(--success)]/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
+                          {t('add_students.status_verified', "Verified")}
+                        </span>
+                      ) : student.status === 'ready_to_verify' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--primary)]/10 text-[var(--primary)] border border-[var(--primary)]/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)]"></span>
+                          {t('add_students.status_ready_to_verify', "Ready to verify")}
+                        </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--bg-secondary)] text-[var(--text-body)] border-[var(--border-color)]">
-                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--text-body)] opacity-70"></span>
-                           {t('add_students.status_waiting_image', "Waiting image")}
-                         </span>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--warning)]/10 text-[var(--warning)] border border-[var(--warning)]/30">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning)]"></span>
+                          {t('add_students.status_waiting_image', "Waiting image")}
+                        </span>
                       )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        {!student.verified && (
+                        {!student.verified && student.hasImage && (
                           <button
                             onClick={() => handleVerify(student.id)}
                             className="flex items-center gap-1 px-3 py-1.5 bg-[var(--success)] text-[var(--text-on-primary)] rounded-lg text-xs font-bold hover:bg-[var(--success)]/90 transition shadow-sm"
@@ -260,16 +323,32 @@ export default function AddStudents() {
           {t('add_students.bottom_note', "Note: Verified students will start appearing in the attendance marking list for their selected subjects and classes. You can revoke access anytime by deleting their entry from the main Students page.")}
         </p>
 
+        <ConfirmationModal 
+          isOpen={isVerifyAllModalOpen}
+          onClose={() => setIsVerifyAllModalOpen(false)}
+          onConfirm={confirmVerifyAll}
+          title={t('add_students.verify_all_title', "Verify all visible students?")}
+          message={t('add_students.verify_all_message', "This will verify all currently visible unverified students for attendance. This action cannot be undone efficiently (you'd need to delete them individually).")}
+          confirmText={isVerifying ? t('common.processing', "Processing...") : t('common.verify_all', "Yes, Verify All")}
+          type="info"
+        >
+          {isVerifying && (
+             <div className="mt-2 flex items-center justify-center text-[var(--primary)]">
+               <Loader2 className="animate-spin mr-2" size={20} />
+               <span className="text-sm font-medium">{t('add_students.verifying_progress', "Verifying students...")}</span>
+             </div>
+          )}
+        </ConfirmationModal>
+
       </main>
     </div>
   );
 }
 
 // Simple Helper Component for Sidebar Items
-// eslint-disable-next-line no-unused-vars
 function NavItem({ icon: IconComp, label }) {
   return (
-    <button className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-body)] hover:bg-[var(--bg-hover)] rounded-lg text-sm font-medium transition-colors">
+    <button className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-body)] hover:bg-[var(--bg-secondary)] rounded-lg text-sm font-medium transition-colors">
       <IconComp size={18} />
       <span>{label}</span>
     </button>

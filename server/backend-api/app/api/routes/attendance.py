@@ -1,24 +1,352 @@
 import base64
 import logging
 from datetime import date
-from typing import Dict, List
+from typing import Dict
 
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException
+from bson import errors as bson_errors
+from fastapi import APIRouter, HTTPException, Request
 
 from geopy.distance import geodesic
 from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD
 from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
+from app.services.attendance import log_grouped_attendance
 from app.services.ml_client import ml_client
 from app.schemas.attendance import AttendanceConfirm
+from app.utils.geo import calculate_distance
+from app.schemas.attendance import QRAttendanceRequest
+from app.core.security import get_current_user
+from app.utils.jwt_token import decode_jwt
+from fastapi import Depends
+
+from app.services.attendance_socket_service import stop_and_save_session, sio
+
+# Import WebAuthn verification
+from app.services.webauthn_service import verify_auth_response, get_rp_id
+from webauthn.helpers import parse_authentication_credential_json
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/attendance", tags=["Attendance"])
+router = APIRouter(prefix="/attendance", tags=["Attendance"])
+
+
+@router.post("/stop-session/{session_id}")
+async def stop_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Manually stop session, flush buffer, and close.
+    """
+    if current_user["role"] not in ["teacher", "admin"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    return await stop_and_save_session(session_id)
+
+
+def _parse_object_id(value: str, field_name: str) -> ObjectId:
+    """
+    Parse a string value to ObjectId, raising HTTPException on failure.
+
+    Args:
+        value: The string value to parse
+        field_name: The field name for error messages
+
+    Returns:
+        ObjectId: The parsed ObjectId
+
+    Raises:
+        HTTPException: If the value is not a valid ObjectId
+    """
+    if not value:
+        raise HTTPException(status_code=400, detail=f"{field_name} is required")
+    try:
+        return ObjectId(value)
+    except bson_errors.InvalidId:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}")
+
+
+def _parse_object_id_list(
+    values: list[str], field_name: str
+) -> tuple[list[ObjectId], set[ObjectId]]:
+    """
+    Parse a list of string values to ObjectIds with deduplication.
+
+    Args:
+        values: List of string values to parse
+        field_name: The field name for error messages
+
+    Returns:
+        tuple: (list of ObjectIds, set of ObjectIds for deduplication)
+
+    Raises:
+        HTTPException: If any value is not a valid ObjectId
+    """
+    oid_list = []
+    oid_set = set()
+
+    for val in values:
+        try:
+            oid = ObjectId(val)
+            oid_list.append(oid)
+            oid_set.add(oid)
+        except bson_errors.InvalidId:
+            raise HTTPException(
+                status_code=400, detail=f"Invalid ObjectId in {field_name}: {val}"
+            )
+
+    return oid_list, oid_set
+
+
+@router.post("/mark-qr")
+async def mark_attendance_qr(
+    payload: QRAttendanceRequest, 
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Mark attendance via QR code with geofencing check and date validation.
+
+    Validates:
+    - subjectId exists
+    - date is today (prevents scanning old screenshots)
+    - token is valid
+    - student location within allowed radius
+
+    Updates:
+    - subjects.students.attendance array (adds attendance record)
+    - subjects.students.present_count (increments counter)
+    """
+    if current_user["role"] != "student":
+        raise HTTPException(status_code=403, detail="Only students can mark attendance")
+
+    # Fetch full user document for biometrics
+    try:
+        user_id = ObjectId(current_user["id"])
+        user_doc = await db.users.find_one({"_id": user_id})
+        if not user_doc:
+             raise HTTPException(status_code=404, detail="Student not found")
+    except Exception:
+         raise HTTPException(status_code=400, detail="Invalid user ID")
+
+    # -------------------------------------------------------------------------
+    # WebAuthn Verification
+    # -------------------------------------------------------------------------
+    if payload.webauthn_credential:
+        origin = request.headers.get("origin")
+        rp_id = get_rp_id(origin)
+        try:
+           credential_model = parse_authentication_credential_json(payload.webauthn_credential)
+           # Pass the full user_doc, which has _id and webauthn_credentials
+           await verify_auth_response(user_doc, credential_model, origin, rp_id)
+        except Exception as e:
+           raise HTTPException(status_code=400, detail=f"Biometric verification failed: {str(e)}")
+    elif user_doc.get("webauthn_credentials") and len(user_doc["webauthn_credentials"]) > 0:
+        # If user has registered biometrics, they MUST use them.
+        raise HTTPException(status_code=400, detail="Biometric authentication required")
+
+    student_oid = user_id
+    subject_id = payload.subjectId
+
+    if not ObjectId.is_valid(subject_id):
+        raise HTTPException(status_code=400, detail="Invalid subject ID")
+
+    subject_oid = ObjectId(subject_id)
+
+    # Validate date is today
+    from datetime import datetime, timezone
+
+    try:
+        qr_date = datetime.fromisoformat(payload.date.replace("Z", "+00:00"))
+        today = datetime.now(timezone.utc).date()
+        qr_day = qr_date.date()
+
+        if qr_day != today:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Expired Session: QR code is not from today. "
+                    "Please scan a fresh QR code."
+                ),
+            )
+    except (ValueError, AttributeError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+
+    # 1. Fetch Subject & Location
+    subject = await db.subjects.find_one({"_id": subject_oid})
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
+
+    # 2. Geofencing Check
+    is_proxy_suspected = False
+    dist = 0.0
+
+    # Try to get live session location first from socket service
+    # This allows for dynamic location updates per session
+    from app.services.attendance_socket_service import session_locations
+
+    session_loc = session_locations.get(payload.sessionId)
+
+    logger.debug("Session id: %s, session_loc: %s", payload.sessionId, session_loc)
+
+    teacher_lat = 0.0
+    teacher_lon = 0.0
+    radius = 50.0  # Default radius
+
+    location_cfg = subject.get("location")
+    if location_cfg:
+        radius = float(location_cfg.get("radius", 50.0))
+
+    if session_loc and "lat" in session_loc and "lon" in session_loc:
+        teacher_lat = float(session_loc["lat"])
+        teacher_lon = float(session_loc["lon"])
+        # If static location has radius configured, use it, else default 50
+    elif location_cfg:
+        # Fallback to static subject location
+        teacher_lat = float(location_cfg.get("lat", 0.0))
+        # Note: field name inconsistency possible: 'long' vs 'lon' vs 'lng'
+        teacher_lon = float(
+            location_cfg.get("long")
+            or location_cfg.get("lon")
+            or location_cfg.get("lng")
+            or 0.0
+        )
+
+    logger.debug(
+        "teacher_lat=%s, teacher_lon=%s, student_lat=%s, student_lon=%s",
+        teacher_lat,
+        teacher_lon,
+        payload.latitude,
+        payload.longitude,
+    )
+
+    if teacher_lat != 0.0 and teacher_lon != 0.0:
+        dist = calculate_distance(
+            teacher_lat, teacher_lon, payload.latitude, payload.longitude
+        )
+        logger.debug("Calculated distance=%s, radius=%s", dist, radius)
+
+        if dist > radius:
+            is_proxy_suspected = True
+            logger.debug("Proxy suspected for session %s", payload.sessionId)
+    else:
+        logger.debug("Skipping distance calculation: teacher location is 0.0")
+
+    # 3. Mark Attendance (Update Subject)
+    today = date.today().isoformat()
+
+    # Check if student has already marked attendance today for this subject
+    existing_subject = await db.subjects.find_one(
+        {
+            "_id": subject_oid,
+            "students": {
+                "$elemMatch": {
+                    "student_id": student_oid,
+                    "attendance.lastMarkedAt": today,
+                }
+            },
+        }
+    )
+
+    if existing_subject:
+        raise HTTPException(
+            status_code=409, detail="Attendance already marked for today"
+        )
+
+    # Update the student's attendance in the subject document
+    # 1. Push attendance record to the attendance array
+    # 2. Increment present counter
+    # 3. Update lastMarkedAt
+    # Note: attendanceRecords array will grow over time. For production use,
+    # consider archiving old records or using a separate collection for
+    # historical data to avoid hitting MongoDB's 16MB document size limit.
+    attendance_record = {
+        "date": today,
+        "status": "Proxy" if is_proxy_suspected else "Present",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": "qr",
+    }
+
+    update_query = {
+        "$push": {"students.$.attendanceRecords": attendance_record},
+        "$inc": {
+            "students.$.attendance.total": 1,
+        },
+        "$set": {"students.$.attendance.lastMarkedAt": today},
+    }
+
+    if not is_proxy_suspected:
+        update_query["$inc"]["students.$.attendance.present"] = 1
+    else:
+        update_query["$inc"]["students.$.attendance.absent"] = 1
+
+    result = await db.subjects.update_one(
+        {"_id": subject_oid, "students.student_id": student_oid},
+        update_query,
+    )
+
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not enrolled in this subject or already marked",
+        )
+
+    # 4. Save audit record including is_proxy_suspected
+    # Use a dedicated attendance_logs collection to store audit events,
+    # avoiding unbounded growth and schema changes on the nested students
+    # array in subjects.
+
+    timestamp_iso = datetime.now(timezone.utc).isoformat()
+
+    await log_grouped_attendance(
+        subject_id=subject_oid,
+        date_str=today,
+        students=[
+            {
+                "studentId": student_oid,
+                "scanTime": timestamp_iso,
+                "method": "qr",
+                "sessionId": payload.sessionId,
+                "token": payload.token,
+                "latitude": payload.latitude,
+                "longitude": payload.longitude,
+                "distance": dist,
+                "isProxy": is_proxy_suspected,
+            }
+        ],
+    )
+
+    # Need student info for socket event
+    student_info = await db.students.find_one({"userId": student_oid})
+    student_name = student_info.get("name", "Unknown") if student_info else "Unknown"
+    student_roll = student_info.get("roll", "") if student_info else ""
+
+    # Emit to teacher's room
+    await sio.emit(
+        "student_scanned",
+        {
+            "student": {
+                "name": student_name,
+                "roll": student_roll,
+                "id": str(student_oid),
+            },
+            "timestamp": timestamp_iso,
+            "location": {
+                "lat": payload.latitude,
+                "lon": payload.longitude,
+            },
+            "is_proxy_suspected": is_proxy_suspected,
+            "distance": dist,
+        },
+        room=payload.sessionId,
+    )
+
+    return {
+        "message": "Attendance marked successfully",
+        "proxy_suspected": is_proxy_suspected,
+        "distance": dist,
+    }
 
 
 @router.post("/mark")
-async def mark_attendance(payload: Dict):
+async def mark_attendance(request: Request, payload: Dict):
     """
     Mark attendance by detecting faces in classroom image
 
@@ -27,7 +355,77 @@ async def mark_attendance(payload: Dict):
       "image": "data:image/jpeg;base64,...",
       "subject_id": "..."
     }
+
+    headers:
+    {
+      "X-Device-ID": "unique-device-uuid"
+    }
     """
+    # Extract device ID from header
+    device_id = request.headers.get("X-Device-ID")
+    if not device_id:
+        raise HTTPException(status_code=400, detail="X-Device-ID header is required")
+
+    # Extract user from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    try:
+        token = auth_header.split(" ")[1]
+        decoded = decode_jwt(token)
+        user_id = decoded.get("user_id")
+        user_role = decoded.get("role")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # Check device binding - ONLY for students
+    # Teachers and admins are exempt from device binding
+    if user_role == "student":
+        try:
+            user = await db.users.find_one({"_id": ObjectId(user_id)})
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+
+            trusted_device_id = user.get("trusted_device_id")
+
+            # Case A: First time (no trusted device set) - Auto-bind and allow
+            if not trusted_device_id:
+                logger.info(
+                    "First-time device detected for user %s: %s. Auto-binding device.",
+                    user_id,
+                    device_id,
+                )
+                await db.users.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"trusted_device_id": device_id}},
+                )
+            # Case B: Device matches
+            elif trusted_device_id == device_id:
+                logger.debug("Device match for user %s", user_id)
+            # Case C: Device mismatch - Require OTP verification
+            else:
+                logger.warning(
+                    "Device mismatch for user %s. Trusted: %s, Current: %s",
+                    user_id,
+                    trusted_device_id,
+                    device_id,
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "New device detected. "
+                        "Please verify with OTP sent to your email."
+                    ),
+                )
+        except bson_errors.InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid user ID")
+    else:
+        logger.debug(
+            "Skipping device binding check for non-student user %s with role: %s",
+            user_id,
+            user_role,
+        )
 
     image_b64 = payload.get("image")
     subject_id = payload.get("subject_id")
@@ -67,7 +465,7 @@ async def mark_attendance(payload: Dict):
             class_pos = (float(location_cfg["lat"]), float(location_cfg["long"]))
             # Default radius 50m if not set
             allowed_radius = float(location_cfg.get("radius", 50))
-            
+
             if allowed_radius <= 0:
                 raise ValueError("Radius must be positive")
 
@@ -149,7 +547,9 @@ async def mark_attendance(payload: Dict):
         if not match_response.get("success"):
             raise HTTPException(
                 status_code=500,
-                detail=f"ML service error: {match_response.get('error', 'Unknown error')}",  # noqa: E501
+                detail=(
+                    f"ML service error: {match_response.get('error', 'Unknown error')}"
+                ),  # noqa: E501
             )
 
         matches = match_response.get("matches", [])
@@ -235,14 +635,26 @@ async def confirm_attendance(payload: AttendanceConfirm):
       "present_students": ["id1", "id2", ...],
       "absent_students": ["id3", "id4", ...]
     }
+
+    response:
+    - present_updated / absent_updated are counts of unique IDs submitted
+      after deduplication (not the count of DB rows modified).
     """
     subject_id = payload.subject_id
     present_students = payload.present_students
     absent_students = payload.absent_students
     selected_date = payload.date
 
-    if not subject_id:
-        raise HTTPException(status_code=400, detail="subject_id required")
+    overlap = present_set.intersection(absent_set)
+    if overlap:
+        raise HTTPException(
+            status_code=400,
+            detail="Students cannot be both present and absent",
+        )
+
+    subject = await db.subjects.find_one({"_id": subject_oid}, {"professor_ids": 1})
+    if not subject:
+        raise HTTPException(status_code=404, detail="Subject not found")
 
     att_date = selected_date.isoformat() if selected_date else date.today().isoformat()
     subject_oid = ObjectId(subject_id)
@@ -280,15 +692,98 @@ async def confirm_attendance(payload: AttendanceConfirm):
     )
 
     # --- Write daily attendance summary ---
-    subject = await db.subjects.find_one({"_id": subject_oid}, {"professor_ids": 1})
     teacher_id = (
         subject["professor_ids"][0]
         if subject and subject.get("professor_ids")
         else None
     )
 
+    # --- Integration with Optimized Attendance Logs ---
+    # Log the students who are marked PRESENT
+    updated_logs_doc = None
+    if present_oids:
+        from datetime import datetime, UTC
+        
+        current_time_iso = datetime.now(UTC).isoformat()
+        
+        log_students = []
+        for pid in present_oids:
+            log_students.append({
+                "studentId": pid,
+                "scanTime": current_time_iso,
+                "method": "Manual_or_Offline_Sync",
+                "isProxy": False
+            })
+            
+        updated_logs_doc = await log_grouped_attendance(
+            subject_id=subject_oid,
+            date_str=today,
+            teacher_id=teacher_id,
+            students=log_students
+        )
+    
+    # Calculate daily totals from the logs if available, otherwise just use curr batch
+    # To be accurate for multiple batches (offline syncs)
+    
+    total_present_today = len(present_set)
+    
+    # If we have logs, we can get the true count of present students for the day
+    if updated_logs_doc and "students" in updated_logs_doc:
+         unique_present = set(str(s["studentId"]) for s in updated_logs_doc["students"])
+         total_present_today = len(unique_present)
+    else:
+         # Try fetch if logs exist but weren't updated in this call (e.g. only absent students sent)
+         existing_logs = await db.attendance_logs.find_one({"subjectId": subject_oid, "date": today})
+         if existing_logs and "students" in existing_logs:
+             unique_present = set(str(s["studentId"]) for s in existing_logs["students"])
+             total_present_today = len(unique_present)
+
     await save_daily_summary(
-        class_id=subject_oid,
+        subject_id=subject_oid,
+        teacher_id=teacher_id,
+        record_date=today,
+        present=total_present_today,
+        absent=len(absent_set),
+    )
+
+    return {
+        "ok": True,
+        "present_updated": len(present_set),
+        "absent_updated": len(absent_set),
+    }
+    # ideally rely on the cumulative logs for 'present'.
+    # For 'absent', since we don't log them in 'attendance_logs',
+    # we might need to rely on accumulation or just overwrite?
+    # The current 'save_daily_summary' overwrites.
+    # If we want to support incremental updates properly,
+    # 'save_daily_summary' should use $inc or we must read-modify-write.
+    
+    total_present_today = len(present_set)
+    if updated_logs_doc and "students" in updated_logs_doc:
+         # Count unique student IDs in logs to get total present for the day
+         unique_present = set(str(s["studentId"]) for s in updated_logs_doc["students"])
+         total_present_today = len(unique_present)
+    elif not updated_logs_doc:
+         # If no present students in this batch, check if there are existing logs
+         existing_logs = await db.attendance_logs.find_one({"subjectId": subject_oid, "date": today})
+         if existing_logs and "students" in existing_logs:
+             unique_present = set(str(s["studentId"]) for s in existing_logs["students"])
+             total_present_today = len(unique_present)
+
+    # For absent, it's harder because we don't log them.
+    # For now, we will use the batch count, but this is flawed for multiple batches.
+    # However, 'absent' is usually calculated as Total - Present.
+    # Let's assume the teacher confirms ONCE or in one session.
+    # The offline sync might break this assumption for 'absent'.
+    # But usually offline sync confirms *Present* scans.
+    # 'Absent' handling might need a different approach or just stick to batch for now.
+    
+    # Correctly calculate absent students based on total enrollment
+    # This fixes the issue where offline partial syncs overwrite 'absent' with 0
+    total_enrolled = len(subject.get("students", []))
+    absent_count = max(0, total_enrolled - total_present_today)
+
+    await save_daily_summary(
         subject_id=subject_oid,
         teacher_id=teacher_id,
         record_date=att_date,
@@ -298,6 +793,6 @@ async def confirm_attendance(payload: AttendanceConfirm):
 
     return {
         "ok": True,
-        "present_updated": len(present_students),
-        "absent_updated": len(absent_students),
+        "present_updated": len(present_set),
+        "absent_updated": len(absent_set),
     }

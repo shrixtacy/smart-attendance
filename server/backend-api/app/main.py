@@ -5,22 +5,31 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+import socketio
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from app.api.routes import teacher_settings as settings_router
 from .api.routes.schedule import router as schedule_router
+from .api.routes.holidays import router as holidays_router
+from .api.routes.exams import router as exams_router
 from .api.routes.attendance import router as attendance_router
 from .api.routes.auth import router as auth_router
-from .api.routes.students import router as students_router
-from .api.routes.notifications import router as notifications_router
-from .core.config import APP_NAME, ORIGINS
 from .api.routes.analytics import router as analytics_router
+from .api.routes.notifications import router as notifications_router
+from .api.routes.reports import router as reports_router
+from .api.routes.students import router as students_router
+from .api.routes.health import router as health_router
+from .api.routes.webauthn import router as webauthn_router
+from .core.config import APP_NAME, ORIGINS
 from app.services.attendance_daily import (
     ensure_indexes as ensure_attendance_daily_indexes,
 )
+from app.services.schedule_service import ensure_indexes as ensure_schedule_indexes
 from app.services.ml_client import ml_client
+from app.services.attendance_socket_service import sio
 from app.db.nonce_store import close_redis
+from app.core.scheduler import start_scheduler, shutdown_scheduler
 
 # New Imports
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -34,7 +43,6 @@ from .middleware.correlation import CorrelationIdMiddleware
 from .middleware.timing import TimingMiddleware
 from .middleware.security import SecurityHeadersMiddleware
 
-from .api.routes.health import router as health_router
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
@@ -59,6 +67,11 @@ async def lifespan(app: FastAPI):
     try:
         await ensure_attendance_daily_indexes()
         logger.info("attendance_daily indexes ensured")
+
+        await ensure_schedule_indexes()
+        logger.info("schedule indexes ensured")
+
+        start_scheduler()
     except Exception as e:
         logger.warning(
             f"Could not connect to MongoDB. Application will continue, but DB features will fail. Error: {e}"  # noqa: E501
@@ -69,6 +82,7 @@ async def lifespan(app: FastAPI):
     await ml_client.close()
     logger.info("ML client closed")
     await close_redis()
+    shutdown_scheduler()
 
 
 def create_app() -> FastAPI:
@@ -81,8 +95,8 @@ def create_app() -> FastAPI:
     # CORS MUST be added FIRST so headers are present even on errors
     app.add_middleware(
         CORSMiddleware,
+        allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
         allow_origins=ORIGINS,
-        allow_origin_regex=r"https://.*\.vercel\.app",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -93,14 +107,14 @@ def create_app() -> FastAPI:
     app.add_middleware(CorrelationIdMiddleware)
     app.add_middleware(TimingMiddleware)
 
-    # SessionMiddleware MUST be added before routers so authlib can use request.session reliably  # noqa: E501
+    # SessionMiddleware MUST be added before routers so authlib can use request.session reliably # noqa: E501
     app.add_middleware(
         SessionMiddleware,
         secret_key=os.getenv("SESSION_SECRET_KEY", "temporary-dev-secret-key"),
         session_cookie="session",
         max_age=14 * 24 * 3600,
-        same_site="lax",
-        https_only=False,
+        same_site="none",
+        https_only=True,
     )
 
     # Exception Handlers
@@ -114,10 +128,14 @@ def create_app() -> FastAPI:
     app.include_router(students_router)
     app.include_router(attendance_router)
     app.include_router(schedule_router)
+    app.include_router(holidays_router)  # ← NEW
+    app.include_router(exams_router)
     app.include_router(settings_router.router)
     app.include_router(notifications_router)
     app.include_router(analytics_router)
+    app.include_router(reports_router)
     app.include_router(health_router, tags=["Health"])
+    app.include_router(webauthn_router)
 
     return app
 
@@ -127,7 +145,10 @@ app = create_app()
 # Instrumentator
 Instrumentator().instrument(app).expose(app)
 
-# Optional: run directly with `python -m app.main`
+# Wrap FastAPI app with Socket.IO as the outermost ASGI layer
+app = socketio.ASGIApp(sio, app)
+
+
 if __name__ == "__main__":
     import uvicorn
 

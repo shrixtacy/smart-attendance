@@ -16,6 +16,7 @@ from ...schemas.notifications import (
 )
 from ...services.notification_service import NotificationService
 from ...core.security import get_current_user
+from ...db.mongo import db
 
 logger = logging.getLogger(__name__)
 
@@ -232,3 +233,113 @@ async def check_duplicate_email(
     )
 
     return {"is_duplicate": is_duplicate}
+
+
+# ============================================
+# IN-APP NOTIFICATION ENDPOINTS (NEW)
+# ============================================
+
+
+@router.get("/in-app/list", response_model=dict)
+async def get_notifications(current_user: dict = Depends(get_current_user)):
+    """
+    Fetch all notifications for the current user.
+    Returns notifications sorted by creation date (newest first).
+    """
+    from bson import ObjectId
+
+    user_id = ObjectId(current_user["id"])
+
+    try:
+        # Fetch notifications sorted by created_at (descending)
+        notifications_cursor = (
+            db.notifications.find({"user_id": user_id}).sort("created_at", -1).limit(50)
+        )
+
+        notifications = []
+        async for notif in notifications_cursor:
+            notif["_id"] = str(notif["_id"])
+            if "user_id" in notif:
+                notif["user_id"] = str(notif["user_id"])
+
+            if "created_at" in notif:
+                if hasattr(notif["created_at"], "isoformat"):
+                    notif["created_at"] = notif["created_at"].isoformat()
+                else:
+                    notif["created_at"] = str(notif["created_at"])
+
+            # Recursive ObjectId serialization for metadata
+            if "metadata" in notif and isinstance(notif["metadata"], dict):
+                for k, v in notif["metadata"].items():
+                    if isinstance(v, ObjectId):
+                        notif["metadata"][k] = str(v)
+
+            # Serialize any OTHER ObjectId fields at root level
+            for k, v in notif.items():
+                if isinstance(v, ObjectId) and k not in ["_id", "user_id"]:
+                    notif[k] = str(v)
+
+            notifications.append(notif)
+
+        # Count unread notifications
+        unread_count = await db.notifications.count_documents(
+            {"user_id": user_id, "is_read": False}
+        )
+
+        return {
+            "notifications": notifications,
+            "total": len(notifications),
+            "unread_count": unread_count,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching notifications: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch notifications")
+
+
+@router.delete("/in-app/delete-all")
+async def delete_all_notifications(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Delete all notifications for the current user.
+    """
+    from bson import ObjectId
+
+    try:
+        user_oid = ObjectId(current_user["id"])
+
+        result = await db.notifications.delete_many({"user_id": user_oid})
+
+        return {
+            "message": f"Deleted {result.deleted_count} notifications",
+            "count": result.deleted_count,
+        }
+    except Exception as e:
+        logger.error(f"Error deleting all notifications: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete notifications")
+
+
+@router.delete("/in-app/{notification_id}")
+async def delete_notification(
+    notification_id: str, current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete a notification.
+    """
+    from bson import ObjectId
+
+    try:
+        notif_oid = ObjectId(notification_id)
+        user_oid = ObjectId(current_user["id"])
+
+        result = await db.notifications.delete_one(
+            {"_id": notif_oid, "user_id": user_oid}
+        )
+
+        if result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Notification not found")
+
+        return {"message": "Notification deleted"}
+    except Exception as e:
+        logger.error(f"Error deleting notification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete notification")

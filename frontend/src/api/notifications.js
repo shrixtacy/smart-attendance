@@ -61,3 +61,32 @@ export const checkDuplicateEmail = async (notificationType, recipientEmail, with
   });
   return response.data;
 };
+
+// ============================================
+// IN-APP NOTIFICATIONS (NEW)
+// ============================================
+
+/**
+ * Fetch all in-app notifications for the current user
+ */
+export const getInAppNotifications = async () => {
+  const response = await api.get("/notifications/in-app/list");
+  return response.data;
+};
+
+/**
+ * Delete a notification
+ */
+export const deleteNotification = async (notificationId) => {
+  const response = await api.delete(`/notifications/in-app/${notificationId}`);
+  return response.data;
+};
+
+/**
+ * Delete all notifications
+ */
+export const deleteAllNotifications = async () => {
+  const response = await api.delete("/notifications/in-app/delete-all");
+  return response.data;
+};
+
