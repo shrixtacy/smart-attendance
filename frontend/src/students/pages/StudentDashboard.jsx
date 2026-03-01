@@ -47,31 +47,42 @@ export default function StudentDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [scheduleData, subjectsData] = await Promise.all([
+        const [scheduleResult, subjectsResult] = await Promise.allSettled([
           fetchStudentTodaySchedule(),
           fetchMySubjects()
         ]);
-        
-        // Schedule
-        setSchedule(scheduleData.classes || []);
 
-        // Overall Attendance Calculation
-        let totalAttended = 0;
-        let totalHeld = 0;
-        
-        if (subjectsData && Array.isArray(subjectsData)) {
-          subjectsData.forEach(sub => {
-            totalAttended += (sub.attended || 0);
-            totalHeld += (sub.total || 0);
-          });
+        // Schedule: render whenever the schedule request succeeds
+        if (scheduleResult.status === "fulfilled") {
+          const scheduleData = scheduleResult.value;
+          setSchedule(scheduleData?.classes || []);
+        } else {
+          console.error("Failed to load schedule", scheduleResult.reason);
+          setError("Failed to load today's schedule");
         }
-        
-        const finalPercentage = totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
-        setOverallAttendance(finalPercentage);
 
+        // Overall Attendance Calculation: only compute when subjects load succeeds
+        if (subjectsResult.status === "fulfilled") {
+          const subjectsData = subjectsResult.value;
+          let totalAttended = 0;
+          let totalHeld = 0;
+
+          if (subjectsData && Array.isArray(subjectsData)) {
+            subjectsData.forEach((sub) => {
+              totalAttended += sub.attended || 0;
+              totalHeld += sub.total || 0;
+            });
+          }
+
+          const finalPercentage =
+            totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
+          setOverallAttendance(finalPercentage);
+        } else {
+          console.error("Failed to load attendance/subjects", subjectsResult.reason);
+        }
       } catch (err) {
-        console.error("Failed to load data", err);
-        setError("Failed to load data");
+        console.error("Unexpected error loading data", err);
+        setError("Unexpected error loading data");
       } finally {
         setLoading(false);
       }
@@ -181,7 +192,7 @@ export default function StudentDashboard() {
                         <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--bg-card)] h-full z-10" style={{ left: '75%' }}></div>
                       </div>
 
-                      <div className="flex justify-between text-[10px] text-[var(--text-on-primary)]/70 font-medium uppercase tracking-wide mt-1">
+                        <div className="text-[10px] text-[var(--text-on-primary)]/70 font-medium uppercase tracking-wide mt-1">
                         <span>{t("student_dashboard.stats.current")}: {overallAttendance}%</span>
                     </div>
                   </div>
