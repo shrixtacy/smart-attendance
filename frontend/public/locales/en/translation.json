@@ -70,7 +70,8 @@
     },
     "errors": {
       "load_failed": "Failed to load subjects"
-    }
+    },
+    "enroll_subject": "Enroll subject"
   },
   "forecast": {
     "title": "History & forecast",
@@ -137,7 +138,11 @@
       "add_btn": "Add subject",
       "modal_title": "Add Subject",
       "cancel": "Cancel"
-    }
+    },
+    "enroll_subject": "Enroll subject",
+    "appearance": "Appearance",
+    "biometric_auth": "Biometric authentication",
+    "logout": "Logout"
   },
   "welcome": "Welcome",
   "login": {
