@@ -37,15 +37,15 @@ def validate_and_decode_image(
             ERROR_IMAGE_TOO_LARGE,
         )
     
-    # 2. Decode base64
+    # 2. Decode base64 with strict validation
     try:
-        image_bytes = base64.b64decode(image_base64)
-    except Exception as e:
+        image_bytes = base64.b64decode(image_base64, validate=True)
+    except Exception:
         return (
             False,
             None,
             None,
-            f"Invalid base64 encoding: {str(e)}",
+            "Invalid base64 encoding",
             ERROR_INVALID_FORMAT,
         )
     
@@ -90,11 +90,11 @@ def validate_and_decode_image(
         
         return (True, image_bytes, image, None, None)
         
-    except Exception as e:
+    except Exception:
         return (
             False,
             None,
             None,
-            f"Failed to process image: {str(e)}",
+            "Failed to process image",
             ERROR_INVALID_FORMAT,
         )

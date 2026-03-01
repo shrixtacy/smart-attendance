@@ -2,7 +2,7 @@
 Tests for image upload validation in backend API
 """
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from io import BytesIO
 from PIL import Image
 
@@ -38,7 +38,8 @@ def create_test_image_file(width=100, height=100, format="JPEG", size_mb=None):
 @pytest.mark.asyncio
 async def test_valid_image_upload():
     """Test that valid image upload succeeds (will fail at auth, but validates size)"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create valid 1MB image
         image_file = create_test_image_file(500, 500, "JPEG")
         
@@ -55,7 +56,8 @@ async def test_valid_image_upload():
 @pytest.mark.asyncio
 async def test_image_too_large():
     """Test that oversized image is rejected"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create 6MB image (exceeds 5MB limit)
         image_file = create_test_image_file(2000, 2000, "JPEG", size_mb=6)
         
@@ -73,7 +75,8 @@ async def test_image_too_large():
 @pytest.mark.asyncio
 async def test_invalid_file_type():
     """Test that non-image file is rejected"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create text file
         text_file = BytesIO(b"This is not an image")
         
@@ -89,7 +92,8 @@ async def test_invalid_file_type():
 @pytest.mark.asyncio
 async def test_gif_image_rejected():
     """Test that GIF images are rejected"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         # Create GIF image
         img = Image.new("RGB", (100, 100), color="blue")
         buffer = BytesIO()
@@ -108,7 +112,8 @@ async def test_gif_image_rejected():
 @pytest.mark.asyncio
 async def test_empty_file():
     """Test that empty file is rejected"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         empty_file = BytesIO(b"")
         
         response = await client.post(
@@ -123,7 +128,8 @@ async def test_empty_file():
 @pytest.mark.asyncio
 async def test_png_image_accepted():
     """Test that PNG images are accepted"""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         image_file = create_test_image_file(500, 500, "PNG")
         
         response = await client.post(

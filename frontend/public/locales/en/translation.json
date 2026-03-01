@@ -120,7 +120,11 @@
       "desc": "Upload a clear, high-quality photo. This will be used for face recognition during attendance.",
       "replace": "Replace photo",
       "upload": "Upload photo",
-      "tips": "Tips: Use good lighting, look straight at the camera, avoid masks, caps, or filters."
+      "tips": "Tips: Use good lighting, look straight at the camera, avoid masks, caps, or filters.",
+      "error_size": "Image too large. Maximum size is 5MB",
+      "error_type": "Invalid file type. Only JPEG and PNG images are allowed",
+      "error_dimensions": "Image dimensions too large. Maximum size is 4096x4096 pixels",
+      "error_load": "Failed to load image. Please try another file"
     },
     "summary": {
       "title": "Attendance summary",

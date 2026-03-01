@@ -130,7 +130,7 @@ async def upload_image_url(
     # 1. Read image bytes
     image_bytes = await file.read()
     
-    # 2. Validate file size
+    # 2. Validate file size (return 413 for payload too large)
     if len(image_bytes) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
@@ -150,24 +150,23 @@ async def upload_image_url(
         )
 
         if not ml_response.get("success"):
-            error_msg = ml_response.get('error', 'Unknown error')
             error_code = ml_response.get('error_code', '')
             
-            # Provide user-friendly error messages
-            if error_code == "IMAGE_TOO_LARGE":
-                detail = "Image file is too large. Please upload an image smaller than 5MB"
-            elif error_code == "INVALID_FORMAT":
-                detail = "Invalid image format. Please upload a JPEG or PNG image"
-            elif error_code == "INVALID_DIMENSIONS":
-                detail = "Image dimensions are too large. Maximum size is 4096x4096 pixels"
-            elif error_code == "NO_FACE_FOUND":
-                detail = "No face detected in the image. Please upload a clear photo of your face"
-            elif error_code == "MULTIPLE_FACES_FOUND":
-                detail = "Multiple faces detected. Please upload a photo with only your face"
-            else:
-                detail = f"Face encoding failed: {error_msg}"
+            # Map ML error codes to user-friendly messages and HTTP status codes
+            error_mapping = {
+                "IMAGE_TOO_LARGE": (413, "Image file is too large. Please upload an image smaller than 5MB"),
+                "INVALID_FORMAT": (400, "Invalid image format. Please upload a JPEG or PNG image"),
+                "INVALID_DIMENSIONS": (400, "Image dimensions are too large. Maximum size is 4096x4096 pixels"),
+                "NO_FACE_FOUND": (400, "No face detected in the image. Please upload a clear photo of your face"),
+                "MULTIPLE_FACES_FOUND": (400, "Multiple faces detected. Please upload a photo with only your face"),
+            }
             
-            raise HTTPException(status_code=400, detail=detail)
+            status_code, detail = error_mapping.get(
+                error_code,
+                (400, "Face encoding failed. Please try another image")
+            )
+            
+            raise HTTPException(status_code=status_code, detail=detail)
 
         embedding = ml_response.get("embedding")
 

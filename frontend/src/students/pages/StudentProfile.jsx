@@ -271,7 +271,7 @@ export default function StudentProfile() {
                 // Validate file size (5MB max)
                 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
                 if (file.size > MAX_FILE_SIZE) {
-                  toast.error("Image too large. Maximum size is 5MB");
+                  toast.error(t("profile.face_image.error_size"));
                   e.target.value = ""; // Reset input
                   return;
                 }
@@ -279,17 +279,20 @@ export default function StudentProfile() {
                 // Validate file type
                 const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
                 if (!allowedTypes.includes(file.type)) {
-                  toast.error("Invalid file type. Only JPEG and PNG images are allowed");
+                  toast.error(t("profile.face_image.error_type"));
                   e.target.value = ""; // Reset input
                   return;
                 }
                 
                 // Validate image dimensions
                 const img = new Image();
+                const objectUrl = URL.createObjectURL(file);
+                
                 img.onload = () => {
+                  URL.revokeObjectURL(objectUrl); // Clean up memory
                   const MAX_DIMENSION = 4096;
                   if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
-                    toast.error(`Image dimensions too large. Maximum size is ${MAX_DIMENSION}x${MAX_DIMENSION} pixels`);
+                    toast.error(t("profile.face_image.error_dimensions"));
                     e.target.value = ""; // Reset input
                     return;
                   }
@@ -299,11 +302,12 @@ export default function StudentProfile() {
                 };
                 
                 img.onerror = () => {
-                  toast.error("Failed to load image. Please try another file");
+                  URL.revokeObjectURL(objectUrl); // Clean up memory
+                  toast.error(t("profile.face_image.error_load"));
                   e.target.value = ""; // Reset input
                 };
                 
-                img.src = URL.createObjectURL(file);
+                img.src = objectUrl;
               }}
             />
 
