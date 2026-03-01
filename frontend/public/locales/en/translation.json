@@ -17,7 +17,9 @@
       "current": "Current",
       "safe_zone_label": "Safe zone: {{percent}}%",
       "need_classes_title": "You need {{count}} more classes",
-      "need_classes_desc": "Attend the next {{count}} scheduled classes to reach the safe {{percent}}% attendance zone buffer."
+      "need_classes_desc": "Attend the next {{count}} scheduled classes to reach the safe {{percent}}% attendance zone buffer.",
+      "target_achieved_title": "Target achieved!",
+      "target_achieved_desc": "You are currently above the {{percent}}% target attendance. Maintain your streak!"
     },
     "schedule": {
       "today": "Today",
