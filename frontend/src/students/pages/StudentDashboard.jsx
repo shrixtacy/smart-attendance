@@ -261,9 +261,11 @@ export default function StudentDashboard() {
               </div>
 
               {/* Empty State / End of List Decor */}
-              <div className="text-center mt-6">
-                <p className="text-xs text-[var(--text-body)]/70">{t("student_dashboard.schedule.all_caught_up")}</p>
-              </div>
+              {schedule && schedule.length > 0 && (
+                <div className="text-center mt-6">
+                  <p className="text-xs text-[var(--text-body)]/70">{t("student_dashboard.schedule.all_caught_up")}</p>
+                </div>
+              )}
             </div>
 
           </div>
