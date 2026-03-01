@@ -81,6 +81,10 @@ export default function StudentProfile() {
     mutationFn: uploadFaceImage,
     onSuccess: () => {
       queryClient.invalidateQueries(["myStudentProfile"]);
+      // Reset file input to allow selecting the same file again
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
     },
   });
 
@@ -261,13 +265,53 @@ export default function StudentProfile() {
             {/* Hidden File Input (Used by Avatar and Face Image Card) */}
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/jpg"
               ref={fileRef}
               hidden
               onChange={(e) => {
-                if (e.target.files[0]) {
-                  uploadMutation.mutate(e.target.files[0]);
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                // Validate file size (5MB max)
+                const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                if (file.size > MAX_FILE_SIZE) {
+                  toast.error(t("profile.face_image.error_size"));
+                  e.target.value = ""; // Reset input
+                  return;
                 }
+                
+                // Validate file type
+                const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+                if (!allowedTypes.includes(file.type)) {
+                  toast.error(t("profile.face_image.error_type"));
+                  e.target.value = ""; // Reset input
+                  return;
+                }
+                
+                // Validate image dimensions
+                const img = new Image();
+                const objectUrl = URL.createObjectURL(file);
+                
+                img.onload = () => {
+                  URL.revokeObjectURL(objectUrl); // Clean up memory
+                  const MAX_DIMENSION = 4096;
+                  if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+                    toast.error(t("profile.face_image.error_dimensions"));
+                    e.target.value = ""; // Reset input
+                    return;
+                  }
+                  
+                  // All validations passed, upload the file
+                  uploadMutation.mutate(file);
+                };
+                
+                img.onerror = () => {
+                  URL.revokeObjectURL(objectUrl); // Clean up memory
+                  toast.error(t("profile.face_image.error_load"));
+                  e.target.value = ""; // Reset input
+                };
+                
+                img.src = objectUrl;
               }}
             />
 
