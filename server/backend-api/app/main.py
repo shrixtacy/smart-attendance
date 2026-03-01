@@ -86,7 +86,13 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title=APP_NAME, lifespan=lifespan)
+    app = FastAPI(
+        title=APP_NAME,
+        lifespan=lifespan,
+        # Add request size limit to prevent DoS attacks
+        # This limits the entire request body size
+        max_request_size=10 * 1024 * 1024  # 10MB (allows for multipart overhead)
+    )
 
     # Rate limiter
     app.state.limiter = limiter

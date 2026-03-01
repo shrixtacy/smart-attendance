@@ -261,13 +261,49 @@ export default function StudentProfile() {
             {/* Hidden File Input (Used by Avatar and Face Image Card) */}
             <input
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/jpg"
               ref={fileRef}
               hidden
               onChange={(e) => {
-                if (e.target.files[0]) {
-                  uploadMutation.mutate(e.target.files[0]);
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                // Validate file size (5MB max)
+                const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+                if (file.size > MAX_FILE_SIZE) {
+                  toast.error("Image too large. Maximum size is 5MB");
+                  e.target.value = ""; // Reset input
+                  return;
                 }
+                
+                // Validate file type
+                const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+                if (!allowedTypes.includes(file.type)) {
+                  toast.error("Invalid file type. Only JPEG and PNG images are allowed");
+                  e.target.value = ""; // Reset input
+                  return;
+                }
+                
+                // Validate image dimensions
+                const img = new Image();
+                img.onload = () => {
+                  const MAX_DIMENSION = 4096;
+                  if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+                    toast.error(`Image dimensions too large. Maximum size is ${MAX_DIMENSION}x${MAX_DIMENSION} pixels`);
+                    e.target.value = ""; // Reset input
+                    return;
+                  }
+                  
+                  // All validations passed, upload the file
+                  uploadMutation.mutate(file);
+                };
+                
+                img.onerror = () => {
+                  toast.error("Failed to load image. Please try another file");
+                  e.target.value = ""; // Reset input
+                };
+                
+                img.src = URL.createObjectURL(file);
               }}
             />
 

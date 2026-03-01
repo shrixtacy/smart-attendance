@@ -110,6 +110,10 @@ async def api_get_student_profile(student_id: str):
 # ============================
 # UPLOAD FACE IMAGE
 # ============================
+# Image validation constants
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+
 @router.post("/me/face-image")
 async def upload_image_url(
     file: UploadFile = File(...), current_user: dict = Depends(get_current_user)
@@ -117,18 +121,26 @@ async def upload_image_url(
     if current_user.get("role") != "student":
         raise HTTPException(status_code=403, detail="Not a student")
 
+    # Validate content type
     if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
-        raise HTTPException(status_code=400, detail="Only JPG/PNG allowed")
+        raise HTTPException(status_code=400, detail="Only JPG/PNG images are allowed")
 
     student_user_id = ObjectId(current_user["id"])
 
     # 1. Read image bytes
     image_bytes = await file.read()
+    
+    # 2. Validate file size
+    if len(image_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Image too large. Maximum size is {MAX_FILE_SIZE // 1024 // 1024}MB"
+        )
 
-    # 2. Convert to base64 for ML service
+    # 3. Convert to base64 for ML service
     image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # 3. Generate face embeddings via ML service
+    # 4. Generate face embeddings via ML service (includes validation)
     try:
         ml_response = await ml_client.encode_face(
             image_base64=image_base64,
@@ -138,10 +150,24 @@ async def upload_image_url(
         )
 
         if not ml_response.get("success"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Face encoding failed: {ml_response.get('error', 'Unknown error')}",  # noqa: E501
-            )
+            error_msg = ml_response.get('error', 'Unknown error')
+            error_code = ml_response.get('error_code', '')
+            
+            # Provide user-friendly error messages
+            if error_code == "IMAGE_TOO_LARGE":
+                detail = "Image file is too large. Please upload an image smaller than 5MB"
+            elif error_code == "INVALID_FORMAT":
+                detail = "Invalid image format. Please upload a JPEG or PNG image"
+            elif error_code == "INVALID_DIMENSIONS":
+                detail = "Image dimensions are too large. Maximum size is 4096x4096 pixels"
+            elif error_code == "NO_FACE_FOUND":
+                detail = "No face detected in the image. Please upload a clear photo of your face"
+            elif error_code == "MULTIPLE_FACES_FOUND":
+                detail = "Multiple faces detected. Please upload a photo with only your face"
+            else:
+                detail = f"Face encoding failed: {error_msg}"
+            
+            raise HTTPException(status_code=400, detail=detail)
 
         embedding = ml_response.get("embedding")
 
@@ -150,7 +176,7 @@ async def upload_image_url(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"ML service error: {str(e)}")
 
-    # 4. Upload image to Cloudinary
+    # 5. Upload image to Cloudinary
     upload_result = upload(
         image_bytes,
         folder="student_faces",
@@ -161,7 +187,7 @@ async def upload_image_url(
 
     image_url = upload_result.get("secure_url")
 
-    # 5. Store image_url + embeddings
+    # 6. Store image_url + embeddings
     await db.students.update_one(
         {"userId": student_user_id},
         {
