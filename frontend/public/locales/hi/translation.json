@@ -24,6 +24,9 @@
       "safe_zone_label": "सुरक्षित क्षेत्र (>{{percent}}%)",
       "need_classes_title": "{{count}} और कक्षाओं की आवश्यकता है",
       "need_classes_desc": "{{percent}}% लक्ष्य तक पहुँचने के लिए अगली {{count}} कक्षाओं में भाग लें।",
+      "target_achieved_title": "लक्ष्य प्राप्त हुआ!",
+      "target_achieved_desc": "अपनी लय बनाए रखें।",
+      "needs_improvement": "सुधार की आवश्यकता",
       "at_risk": "जोखिम में",
       "overall_attendance": "कुल उपस्थिति"
     },
@@ -70,7 +73,8 @@
     },
     "errors": {
       "load_failed": "विषय लोड करने में विफल"
-    }
+    },
+    "enroll_subject": "विषय में नामांकन करें"
   },
   "forecast": {
     "title": "इतिहास और पूर्वानुमान",
@@ -137,7 +141,11 @@
       "add_btn": "विषय जोड़ें",
       "modal_title": "विषय जोड़ें",
       "cancel": "रद्द करें"
-    }
+    },
+    "enroll_subject": "विषय में नामांकन करें",
+    "appearance": "दिखावट",
+    "biometric_auth": "बायोमेट्रिक प्रमाणीकरण",
+    "logout": "लॉग आउट"
   },
   "welcome": "स्वागत है",
   "login": {
