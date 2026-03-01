@@ -273,8 +273,8 @@ export default function StudentProfile() {
 
             {/* Card: Appearance / Theme Settings */}
             <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-6 mb-4">
-              <h4 className="text-base font-bold text-slate-800 mb-1">
-                Appearance
+              <h4 className="text-base font-bold text-[var(--text-main)] mb-1">
+                {t("profile.appearance")}
               </h4>
               <p className="text-xs text-[var(--text-main)] mb-4">
                 Customize the look and feel of the application.
@@ -302,7 +302,7 @@ export default function StudentProfile() {
             <div className="bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] shadow-sm p-6 space-y-4">
                <div>
                   <h4 className="text-base font-bold text-[var(--text-main)]">
-                    Biometric Authentication
+                    {t("profile.biometric_auth")}
                   </h4>
                   <p className="text-xs text-[var(--text-body)]/80 mt-1 max-w-md leading-relaxed">
                     Register your device (Fingerprint, FaceID, or Windows Hello) for fast, secure attendance marking.
