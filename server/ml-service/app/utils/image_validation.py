@@ -84,6 +84,9 @@ def validate_and_decode_image(
                 ERROR_INVALID_DIMENSIONS,
             )
         
+        # Force decode to catch corrupted/truncated images during validation
+        image.load()
+        
         # Convert to RGB if needed
         if image.mode != "RGB":
             image = image.convert("RGB")

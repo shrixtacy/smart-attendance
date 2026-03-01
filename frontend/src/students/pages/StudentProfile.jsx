@@ -81,6 +81,10 @@ export default function StudentProfile() {
     mutationFn: uploadFaceImage,
     onSuccess: () => {
       queryClient.invalidateQueries(["myStudentProfile"]);
+      // Reset file input to allow selecting the same file again
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
     },
   });
 
