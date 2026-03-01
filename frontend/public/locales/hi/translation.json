@@ -24,6 +24,9 @@
       "safe_zone_label": "सुरक्षित क्षेत्र (>{{percent}}%)",
       "need_classes_title": "{{count}} और कक्षाओं की आवश्यकता है",
       "need_classes_desc": "{{percent}}% लक्ष्य तक पहुँचने के लिए अगली {{count}} कक्षाओं में भाग लें।",
+      "target_achieved_title": "लक्ष्य प्राप्त हुआ!",
+      "target_achieved_desc": "अपनी लय बनाए रखें।",
+      "needs_improvement": "सुधार की आवश्यकता",
       "at_risk": "जोखिम में",
       "overall_attendance": "कुल उपस्थिति"
     },
