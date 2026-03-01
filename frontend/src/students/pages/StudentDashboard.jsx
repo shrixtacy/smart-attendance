@@ -16,12 +16,13 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import StudentNavigation from "../components/StudentNavigation"
-import { fetchStudentTodaySchedule } from "../../api/students";
+import { fetchStudentTodaySchedule, fetchMySubjects } from "../../api/students";
 import { useEffect, useState } from "react";
 
 export default function StudentDashboard() {
   const { t, i18n } = useTranslation();
   const [schedule, setSchedule] = useState([]);
+  const [overallAttendance, setOverallAttendance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tick, setTick] = useState(0);
@@ -44,19 +45,38 @@ export default function StudentDashboard() {
   }, []);
 
   useEffect(() => {
-    const loadSchedule = async () => {
+    const fetchData = async () => {
       try {
-        const data = await fetchStudentTodaySchedule();
-        // data.classes is the list
-        setSchedule(data.classes || []);
+        const [scheduleData, subjectsData] = await Promise.all([
+          fetchStudentTodaySchedule(),
+          fetchMySubjects()
+        ]);
+        
+        // Schedule
+        setSchedule(scheduleData.classes || []);
+
+        // Overall Attendance Calculation
+        let totalAttended = 0;
+        let totalHeld = 0;
+        
+        if (subjectsData && Array.isArray(subjectsData)) {
+          subjectsData.forEach(sub => {
+            totalAttended += (sub.attended || 0);
+            totalHeld += (sub.total || 0);
+          });
+        }
+        
+        const finalPercentage = totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
+        setOverallAttendance(finalPercentage);
+
       } catch (err) {
-        console.error("Failed to load schedule", err);
-        setError("Failed to load schedule");
+        console.error("Failed to load data", err);
+        setError("Failed to load data");
       } finally {
         setLoading(false);
       }
     };
-    loadSchedule();
+    fetchData();
   }, []);
 
   const formatTimeRange = (start, end) => {
@@ -144,31 +164,25 @@ export default function StudentDashboard() {
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <p className="text-[var(--text-on-primary)]/80 text-sm font-medium">{t("student.myAttendance")}</p>
-                      <h2 className="text-5xl font-bold mt-1">78%</h2>
+                        <h2 className="text-5xl font-bold mt-1">{overallAttendance}%</h2>
+                      </div>
+                      <span className="bg-[var(--bg-card)]/20 backdrop-blur-sm text-[var(--text-on-primary)] px-3 py-1 rounded-full text-xs font-semibold border border-[var(--bg-card)]/20">
+                        {overallAttendance >= 75 ? t("student_dashboard.stats.on_track") : t("student_dashboard.stats.at_risk", "At Risk")}
+                      </span>
                     </div>
-                    <span className="bg-[var(--bg-card)]/20 backdrop-blur-sm text-[var(--text-on-primary)] px-3 py-1 rounded-full text-xs font-semibold border border-[var(--bg-card)]/20">
-                      {t("student_dashboard.stats.on_track")}
-                    </span>
-                  </div>
 
-                  <div className="space-y-2">
-                    <p className="text-sm text-[var(--text-on-primary)]/85">{t("student_dashboard.stats.keep_attending")}</p>
-                    
-                    {/* Progress Bar */}
-                    <div className="h-2 bg-[var(--bg-card)]/30 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-[var(--success)] w-[78%]"></div>
-                      <div className="h-full bg-[var(--bg-card)]/30 flex-1 relative">
+                    <div className="space-y-2">
+                      <p className="text-sm text-[var(--text-on-primary)]/85">{t("student_dashboard.stats.keep_attending")}</p>
+                      
+                      {/* Progress Bar */}
+                      <div className="h-2 bg-[var(--bg-card)]/30 rounded-full overflow-hidden flex relative">
+                        <div className={`h-full ${overallAttendance >= 75 ? 'bg-[var(--success)]' : 'bg-[var(--warning)]'} transition-all duration-500`} style={{ width: `${Math.min(overallAttendance, 100)}%` }}></div>
                         {/* Safe Zone Marker */}
-                        <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-[var(--bg-card)] h-full"></div>
+                        <div className="absolute top-0 bottom-0 w-0.5 bg-[var(--bg-card)] h-full z-10" style={{ left: '75%' }}></div>
                       </div>
-                    </div>
 
-                    <div className="flex justify-between text-[10px] text-[var(--text-on-primary)]/70 font-medium uppercase tracking-wide mt-1">
-                      <span>{t("student_dashboard.stats.current")}: 78%</span>
-                      <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]"></span>
-                        <span>{t("student_dashboard.stats.safe_zone_label", { percent: 75 })}</span>
-                      </div>
+                      <div className="flex justify-between text-[10px] text-[var(--text-on-primary)]/70 font-medium uppercase tracking-wide mt-1">
+                        <span>{t("student_dashboard.stats.current")}: {overallAttendance}%</span>
                     </div>
                   </div>
 
