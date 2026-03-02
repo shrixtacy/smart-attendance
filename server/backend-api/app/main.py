@@ -30,6 +30,8 @@ from app.services.ml_client import ml_client
 from app.services.attendance_socket_service import sio
 from app.db.nonce_store import close_redis
 from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.db.mongo import db
+from app.db.indexes import create_indexes
 
 # New Imports
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -70,6 +72,9 @@ async def lifespan(app: FastAPI):
 
         await ensure_schedule_indexes()
         logger.info("schedule indexes ensured")
+
+        await create_indexes(db)
+        logger.info("application indexes ensured")
 
         start_scheduler()
     except Exception as e:
