@@ -13,6 +13,7 @@ ML_LIVENESS_CHECK = os.getenv("ML_LIVENESS_CHECK", "true").lower() == "true"
 LIVENESS_BLUR_THRESHOLD = int(os.getenv("LIVENESS_BLUR_THRESHOLD", "10")) # Lowered to catch only severe flat colors
 LIVENESS_BLUR_MAX_THRESHOLD = int(os.getenv("LIVENESS_BLUR_MAX_THRESHOLD", "800")) # Reject high-freq noise (screen moiré)
 LIVENESS_COLOR_MIN_STD = float(os.getenv("LIVENESS_COLOR_MIN_STD", "5.0")) # Lowered for low-light scenarios
+LIVENESS_FAIL_OPEN = os.getenv("LIVENESS_FAIL_OPEN", "false").lower() == "true"
 
 mp_face_mesh = mp.solutions.face_mesh
 
@@ -91,7 +92,4 @@ def is_live(face_crop: np.ndarray) -> bool:
             
     except Exception as e:
         logger.error(f"Liveness check failed: {e}")
-        # Fail open: assume live if check fails to prevent blocking on system error
-        return True
-        # Default to True on error to avoid blocking legitimate users if model fails
-        return True
+        return True if LIVENESS_FAIL_OPEN else False
