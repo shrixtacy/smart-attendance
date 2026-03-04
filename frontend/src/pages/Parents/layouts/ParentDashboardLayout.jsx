@@ -98,7 +98,7 @@ const ParentDashboardLayout = () => {
         <header className="hidden md:flex justify-between items-center p-8 pb-0">
              <div>
                 <h2 className="text-2xl font-bold text-slate-900">Parent Dashboard</h2>
-                <p className="text-slate-500">Track Nemchand's attendance and academic engagement in real time.</p>
+                <p className="text-slate-500">Track Nemchand&apos;s attendance and academic engagement in real time.</p>
              </div>
              <div className="flex items-center gap-4">
                 <button className="p-2 bg-white text-slate-600 rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50">
