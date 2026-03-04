@@ -1,9 +1,6 @@
 from fastapi import APIRouter, Depends
-import base64
-from io import BytesIO
 import time
 import numpy as np
-from PIL import Image
 
 from app.schemas.requests import (
     EncodeFaceRequest,
@@ -49,14 +46,12 @@ async def encode_face(request: EncodeFaceRequest):
         success, image_bytes, image, error_msg, error_code = validate_and_decode_image(
             request.image_base64
         )
-        
+
         if not success:
             return EncodeFaceResponse(
-                success=False,
-                error=error_msg,
-                error_code=error_code
+                success=False, error=error_msg, error_code=error_code
             )
-        
+
         # Convert PIL image to numpy array
         image_np = np.array(image)
 
@@ -116,13 +111,10 @@ async def detect_faces_api(request: DetectFacesRequest):
         success, image_bytes, image, error_msg, error_code = validate_and_decode_image(
             request.image_base64
         )
-        
+
         if not success:
-            return DetectFacesResponse(
-                success=False,
-                error=error_msg
-            )
-        
+            return DetectFacesResponse(success=False, error=error_msg)
+
         # Convert PIL image to numpy array
         image_np = np.array(image)
 
