@@ -22,7 +22,7 @@ Endpoints:
 
 from bson import ObjectId
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps import get_current_teacher
 from app.db.mongo import db

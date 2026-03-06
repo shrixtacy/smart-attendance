@@ -415,7 +415,6 @@ async def export_student_roster_pdf(
     import html
     import io
     from datetime import datetime
-    from fastapi import Query
     from fastapi.responses import StreamingResponse
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
