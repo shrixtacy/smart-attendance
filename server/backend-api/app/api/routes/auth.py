@@ -7,6 +7,7 @@ import secrets
 import os
 import jwt
 from bson import ObjectId
+from bson.errors import InvalidId
 from app.utils.jwt_token import (
     create_access_token,
     create_refresh_token,
@@ -49,10 +50,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["Auth"])
 oauth = OAuth()
 
-# NOTE: Rate limiter uses slowapi's get_remote_address() which extracts IP from request.client
-# For production deployments behind reverse proxies (nginx, load balancer), ensure the proxy
-# forwards the real client IP via X-Forwarded-For header and configure trusted proxy middleware
-# in main.py to parse it correctly. Otherwise, all requests will be rate-limited by proxy IP.
+# NOTE: Rate limiter uses slowapi's get_remote_address() which extracts IP from
+# request.client. For production deployments behind reverse proxies
+# (nginx, load balancer), ensure the proxy forwards the real client IP via
+# X-Forwarded-For header and configure trusted proxy middleware in main.py to
+# parse it correctly. Otherwise, all requests will be rate-limited by proxy IP.
 # See: https://slowapi.readthedocs.io/en/latest/#using-x-forwarded-for
 
 

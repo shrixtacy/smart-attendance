@@ -1,5 +1,5 @@
-
-import { Outlet, NavLink} from 'react-router-dom';
+import React from 'react';
+import { Outlet, NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   BookOpen, 
@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 
 const ParentDashboardLayout = () => {
- 
+  // const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // const location = useLocation();
+
   const navItems = [
     { name: 'Overview', icon: LayoutDashboard, path: '/parent/dashboard' },
     { name: 'Academics', icon: BookOpen, path: '/parent/academics' },

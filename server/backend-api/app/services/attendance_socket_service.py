@@ -10,6 +10,7 @@ from app.core.config import ORIGINS
 from app.db.mongo import db
 from app.services.attendance import log_grouped_attendance
 from app.services.attendance_daily import save_daily_summary
+from app.utils.geo import calculate_distance
 
 logger = logging.getLogger(__name__)
 

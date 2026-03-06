@@ -82,8 +82,10 @@ async def add_exam(
     teacher_oid = teacher["_id"]
     date_str = payload.date.isoformat()
 
-    # Check for duplicate date (optional: if multiple exams can be on same day, remove this check)
-    # The requirement says "Override schedule for exams". Usually implies the WHOLE day is an exam day.
+    # Check for duplicate date (optional: if multiple exams can be on same day,
+    # remove this check)
+    # The requirement says "Override schedule for exams". Usually implies the
+    # WHOLE day is an exam day.
     # So checking for duplicate date makes sense if it's an "Exam Day" concept.
     # However, user example: "Maths Final". What if "Physics Final" is in the afternoon?
     # The requirement says "Exams must override the regular schedule".
@@ -136,7 +138,12 @@ async def update_exam(
 
     date_str = payload.date.isoformat()
 
+<<<<<<< HEAD
     # Check if we are moving the exam to a date that already has an exam (and it's not THIS exam)
+=======
+    # Check if we are moving the exam to a date that already has an exam (and
+    # it's not THIS exam)
+>>>>>>> c22d217031a31c94ffc439b5ae01e1eb988c53d4
     existing_date = await db.exams.find_one(
         {"teacher_id": teacher_oid, "date": date_str, "_id": {"$ne": ObjectId(exam_id)}}
     )

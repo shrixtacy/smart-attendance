@@ -1,7 +1,4 @@
 import base64
-from datetime import datetime
-from urllib.parse import urlparse
-
 from webauthn import (
     generate_registration_options,
     verify_registration_response,
@@ -20,9 +17,12 @@ from webauthn.helpers.structs import (
 )
 
 from app.db.mongo import db
+from datetime import datetime
 
 
 def get_rp_id(origin: str) -> str:
+    from urllib.parse import urlparse
+
     if not origin:
         return "localhost"
 
@@ -30,15 +30,8 @@ def get_rp_id(origin: str) -> str:
     return parsed.hostname or "localhost"
 
 
-# -----------------------------
-# Registration
-# -----------------------------
-
-
 async def generate_reg_options(
-    user: dict,
-    rp_id: str,
-    rp_name: str = "Smart Attendance",
+    user: dict, rp_id: str, rp_name: str = "Smart Attendance"
 ):
     exclude_credentials = []
 
@@ -47,14 +40,14 @@ async def generate_reg_options(
             try:
                 cred_id_bytes = base64url_to_bytes(cred["credential_id"])
                 exclude_credentials.append(
-                    {
+                    {  # Correct structure for PyWebAuthn
                         "id": cred_id_bytes,
                         "type": "public-key",
                         "transports": cred.get("transports", []),
                     }
                 )
             except Exception:
-                pass
+                pass  # Ignore malformed credentials
 
     options = generate_registration_options(
         rp_id=rp_id,
@@ -70,25 +63,29 @@ async def generate_reg_options(
         exclude_credentials=exclude_credentials,
     )
 
+    # Store challenge as string (base64url)
+    # options.challenge is bytes in newer versions of webauthn library?
+    # Actually generate_registration_options returns
+    # PublicKeyCredentialCreationOptions object.
+    # The challenge is bytes. We need to store it to verify later.
+    # We can store the bytes directly if using pymongo binary, or base64 encode it.
+    # The `verify_registration_response` expects bytes for `expected_challenge`.
+
+    import base64
+
     challenge_b64 = (
-        base64.urlsafe_b64encode(options.challenge)
-        .decode("ascii")
-        .rstrip("=")
+        base64.urlsafe_b64encode(options.challenge).decode("ascii").rstrip("=")
     )
 
     await db.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"current_challenge": challenge_b64}},
+        {"_id": user["_id"]}, {"$set": {"current_challenge": challenge_b64}}
     )
 
     return options
 
 
 async def verify_reg_response(
-    user: dict,
-    response: RegistrationCredential,
-    origin: str,
-    rp_id: str,
+    user: dict, response: RegistrationCredential, origin: str, rp_id: str
 ):
     expected_challenge = user.get("current_challenge")
 
@@ -108,16 +105,16 @@ async def verify_reg_response(
     except Exception as e:
         raise ValueError(f"Registration verification failed: {e}")
 
-    cred_id_b64 = (
-        base64.urlsafe_b64encode(verification.credential_id)
-        .decode("ascii")
-        .rstrip("=")
-    )
+    # Process and encode credential data for storage
+    import base64
 
+    # credential_id and credential_public_key are bytes, need to be stored as
+    # base64url strings
+    cred_id_b64 = (
+        base64.urlsafe_b64encode(verification.credential_id).decode("ascii").rstrip("=")
+    )
     pub_key_b64 = (
-        base64.urlsafe_b64encode(
-            verification.credential_public_key
-        )
+        base64.urlsafe_b64encode(verification.credential_public_key)
         .decode("ascii")
         .rstrip("=")
     )
@@ -141,11 +138,6 @@ async def verify_reg_response(
     return credential_data
 
 
-# -----------------------------
-# Authentication
-# -----------------------------
-
-
 async def generate_auth_options(user: dict, rp_id: str):
     allow_credentials = []
 
@@ -157,10 +149,15 @@ async def generate_auth_options(user: dict, rp_id: str):
                 if isinstance(cid, bytes):
                     cid = cid.decode("utf-8")
 
+                # Convert transports if they exist
                 transports = []
 
                 if cred.get("transports"):
-                    for t in cred["transports"]:
+                    # Webauthn expects AuthenticatorTransport enum if possible or
+                    # strings
+                    # The library usually handles strings if passed to
+                    # AuthenticatorTransport
+                    for t in cred.get("transports"):
                         try:
                             transports.append(AuthenticatorTransport(t))
                         except ValueError:
@@ -169,13 +166,18 @@ async def generate_auth_options(user: dict, rp_id: str):
                 allow_credentials.append(
                     PublicKeyCredentialDescriptor(
                         id=base64url_to_bytes(cid),
-                        transports=transports or None,
+                        transports=transports if transports else None,
                     )
                 )
             except Exception as e:
                 print(f"Skipping credential due to error: {e}")
 
     if not allow_credentials:
+        # If no credentials, we can't authenticate with specific credentials.
+        # But maybe we want to allow resident keys?
+        # For this specific flow (attendance), the user is logged in, so we know
+        # who they are.
+        # We want to verify *their* registered authenticator.
         raise ValueError("No biometric credentials registered")
 
     options = generate_authentication_options(
@@ -184,53 +186,64 @@ async def generate_auth_options(user: dict, rp_id: str):
         user_verification=UserVerificationRequirement.REQUIRED,
     )
 
+    import base64
+
     challenge_b64 = (
-        base64.urlsafe_b64encode(options.challenge)
-        .decode("ascii")
-        .rstrip("=")
+        base64.urlsafe_b64encode(options.challenge).decode("ascii").rstrip("=")
     )
 
+    print(f"DEBUG: Setting challenge for user {user['_id']}: {challenge_b64}")
+
     await db.users.update_one(
-        {"_id": user["_id"]},
-        {"$set": {"current_challenge": challenge_b64}},
+        {"_id": user["_id"]}, {"$set": {"current_challenge": challenge_b64}}
     )
 
     return options
 
 
 async def verify_auth_response(
-    user: dict,
-    response: AuthenticationCredential,
-    origin: str,
-    rp_id: str,
+    user: dict, response: AuthenticationCredential, origin: str, rp_id: str
 ):
+    print(
+        f"DEBUG: Verifying user {user['_id']}. Challenge in DB: "
+        f"{user.get('current_challenge')} "
+        f"(type: {type(user.get('current_challenge'))})"
+    )
+
     expected_challenge = user.get("current_challenge")
 
     if not expected_challenge:
         fresh_user = await db.users.find_one({"_id": user["_id"]})
 
         if fresh_user:
+            print(
+                f"DEBUG: Found challenge in fresh user fetch: "
+                f"{fresh_user.get('current_challenge')}"
+            )
             expected_challenge = fresh_user.get("current_challenge")
-            user = fresh_user
+            user = fresh_user  # update reference
+        else:
+            print("DEBUG: Still no challenge found after re-fetch.")
 
     if not expected_challenge:
         raise ValueError("No authentication challenge found")
 
+    # Find credential public key
+    # response.id is base64url encoded string in the Pydantic model usually
     credential_id = response.id
-    credential = None
 
-    for cred in user.get("webauthn_credentials", []):
-        if cred["credential_id"] == credential_id:
-            credential = cred
-            break
+    credential = None
+    if "webauthn_credentials" in user:
+        for cred in user["webauthn_credentials"]:
+            if cred["credential_id"] == credential_id:
+                credential = cred
+                break
 
     if not credential:
+        # Fallback: check raw_id if it helps (it's bytes)
         raw_id_b64 = (
-            base64.urlsafe_b64encode(response.raw_id)
-            .decode("ascii")
-            .rstrip("=")
+            base64.urlsafe_b64encode(response.raw_id).decode("ascii").rstrip("=")
         )
-
         for cred in user.get("webauthn_credentials", []):
             if cred["credential_id"] == raw_id_b64:
                 credential = cred
@@ -262,9 +275,12 @@ async def verify_auth_response(
         {
             "$set": {
                 "webauthn_credentials.$.sign_count": verification.new_sign_count,
-                "current_challenge": None,
+                "current_challenge": "",
             }
         },
     )
+    # Note: clearing challenge prevents replay but might cause issues if
+    # verification fails and we want to retry?
+    # Standard practice is to generate new challenge on retry.
 
     return verification

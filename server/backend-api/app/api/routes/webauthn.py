@@ -87,7 +87,8 @@ async def authenticate_options(
         # Verify persistence immediately for debugging
         check_user = await db.users.find_one({"_id": user_doc["_id"]})
         print(
-            f"[DEBUG] Auth Options Generated. Challenge set to: {check_user.get('current_challenge')}"
+            f"[DEBUG] Auth Options Generated. Challenge set to: "
+            f"{check_user.get('current_challenge')}"
         )
 
         return Response(content=options_to_json(options), media_type="application/json")
@@ -113,11 +114,12 @@ async def authenticate_verify(
             raise HTTPException(status_code=404, detail="User not found")
 
         print(
-            f"[DEBUG] Verify called for user {user_doc['_id']}. Current Challenge: {user_doc.get('current_challenge')}"
+            f"[DEBUG] Verify called for user {user_doc['_id']}. "
+            f"Current Challenge: {user_doc.get('current_challenge')}"
         )
 
         credential = parse_authentication_credential_json(body)
-        
+        await verify_auth_response(user_doc, credential, origin, rp_id)
         return {"status": "success"}
     except Exception as e:
         import traceback
