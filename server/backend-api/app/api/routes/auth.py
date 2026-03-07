@@ -337,9 +337,11 @@ async def refresh_token_endpoint(request: Request, payload: RefreshTokenRequest)
         )
 
         if not stored_token:
-            raise HTTPException(status_code=401, detail="Invalid or revoked refresh token")
+            err_detail = "Invalid or revoked refresh token"
+            raise HTTPException(status_code=401, detail=err_detail)
 
-        if stored_token["expires_at"] < datetime.now(timezone.utc):
+        normalized_expiry = _normalize_expiry(stored_token.get("expires_at"))
+        if normalized_expiry is None or normalized_expiry < datetime.now(timezone.utc):
             await db.refresh_tokens.update_one(
                 {"_id": stored_token["_id"]},
                 {"$set": {"revoked": True}}
@@ -999,7 +1001,7 @@ async def logout(request: Request):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     try:
-        user = await db.users.find_one({"_id": obj_id}, {"role": 1})
+        user = await db.users.find_one({"_id": obj_id}, {"role": 1, "current_active_session": 1})
 
         if not user:
             logger.warning("Logout attempted for non-existent user: %s", user_id)
@@ -1022,18 +1024,17 @@ async def logout(request: Request):
             {"$set": {"revoked": True}}
         )
 
-        update_query = {
-            "$unset": {
-                "current_active_session": 1,
-            }
-        }
+        update_query = {}
+
+        stored_session = user.get("current_active_session")
+        if session_id and stored_session == hash_session_id(session_id):
+            update_query["$unset"] = {"current_active_session": 1}
 
         if user.get("role") == "student":
-            update_query["$set"] = {
-                "last_logout_time": datetime.now(timezone.utc),
-            }
+            update_query.setdefault("$set", {})["last_logout_time"] = datetime.now(timezone.utc)
 
-        await db.users.update_one({"_id": obj_id}, update_query)
+        if update_query:
+            await db.users.update_one({"_id": obj_id}, update_query)
 
         logger.info("User logged out: %s (Role: %s)", user_id, user.get("role"))
         return {"message": "Logged out successfully"}

@@ -73,7 +73,8 @@ async def lifespan(app: FastAPI):
         logger.info("application indexes ensured")
     except Exception as e:
         logger.warning(
-            f"Could not connect to MongoDB. Application will continue, but DB features will fail. Error: {e}"
+            "Could not connect to MongoDB. Application will continue, "
+            f"but DB features will fail. Error: {e}"
         )
         logger.warning("Please check your MONGO_URI in .env")
 
