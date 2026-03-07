@@ -36,9 +36,8 @@ from .middleware.correlation import CorrelationIdMiddleware
 from .middleware.timing import TimingMiddleware
 from .middleware.security import SecurityHeadersMiddleware
 
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from app.core.limiter import limiter
+from app.core.limiter import limiter, rate_limit_exceeded_handler
 
 load_dotenv()
 
@@ -89,7 +88,7 @@ def create_app() -> FastAPI:
 
     # Rate limiter
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
     # CORS MUST be added FIRST so headers are present even on errors
     app.add_middleware(
