@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 async def create_indexes():
     client = AsyncIOMotorClient(settings.MONGO_URI)
-    db = client.get_database()
+    db = client.get_database(settings.MONGO_DB)
     
     try:
         await db.refresh_tokens.create_index(
@@ -31,7 +31,7 @@ async def create_indexes():
         logger.info("Created unique index on refresh_tokens.token_hash")
         
     except Exception as e:
-        logger.error(f"Error creating indexes: {e}")
+        logger.error(f"Error creating indexes: {e}", exc_info=True)
         raise
     finally:
         client.close()

@@ -1,5 +1,9 @@
 import os
-os.environ.setdefault("JWT_SECRET", "test-secret-key-123")
+import pytest
+
+@pytest.fixture(autouse=True)
+def setup_jwt_secret(monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "test-secret-key-123")
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
