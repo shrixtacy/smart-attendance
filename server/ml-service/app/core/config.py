@@ -47,7 +47,8 @@ class Settings(BaseSettings):
         if not api_key:
             raise ValueError(
                 "ML_API_KEY environment variable is required. "
-                "Set ML_API_KEY (or legacy API_KEY) to configure the ML service API key."
+                "Set ML_API_KEY (or legacy API_KEY) "
+                "to configure the ML service API key."
             )
         # Keep both fields in sync for legacy and current access paths
         self.ML_API_KEY = api_key
