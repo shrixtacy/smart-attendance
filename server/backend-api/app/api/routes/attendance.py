@@ -5,7 +5,15 @@ from typing import Dict
 
 from bson import ObjectId
 from bson import errors as bson_errors
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect, Query, status
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+    Query,
+    status,
+)
 from pymongo import UpdateOne
 
 from geopy.distance import geodesic
@@ -44,9 +52,7 @@ async def stop_session(session_id: str, current_user: dict = Depends(get_current
 
 @router.websocket("/ws/{session_id}")
 async def websocket_endpoint(
-    websocket: WebSocket,
-    session_id: str,
-    token: str = Query(...)
+    websocket: WebSocket, session_id: str, token: str = Query(...)
 ):
     """
     WebSocket endpoint for real-time attendance marking.
@@ -94,7 +100,9 @@ async def websocket_endpoint(
                 subject_id = data.get("subject_id")
 
                 if not image_b64 or not subject_id:
-                    await websocket.send_json({"type": "error", "message": "Missing image or subject_id"})
+                    await websocket.send_json(
+                        {"type": "error", "message": "Missing image or subject_id"}
+                    )
                     continue
 
                 try:
@@ -108,14 +116,16 @@ async def websocket_endpoint(
                         image_base64=image_b64,
                         min_face_area_ratio=0.01,
                         num_jitters=3,
-                        model="hog"
+                        model="hog",
                     )
 
                     if not ml_response.get("success"):
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": ml_response.get("error", "ML Error")
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "message": ml_response.get("error", "ML Error"),
+                            }
+                        )
                         continue
 
                     faces = ml_response.get("faces", [])
@@ -123,20 +133,24 @@ async def websocket_endpoint(
 
                     # Notify start of processing
                     # Use 'processing' status as requested
-                    await websocket.send_json({
-                        "type": "processing_started",
-                        "status": "processing",
-                        "matched": [],
-                        "pending": count
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "processing_started",
+                            "status": "processing",
+                            "matched": [],
+                            "pending": count,
+                        }
+                    )
 
                     if count == 0:
-                        await websocket.send_json({
-                            "type": "complete",
-                            "status": "complete",
-                            "matched": [],
-                            "unmatched": []
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "complete",
+                                "status": "complete",
+                                "matched": [],
+                                "unmatched": [],
+                            }
+                        )
                         continue
 
                     # Fetch Candidates
@@ -148,14 +162,15 @@ async def websocket_endpoint(
                         )
                     except bson_errors.InvalidId:
                         subject = None
-                        
+
                     if not subject:
-                        await websocket.send_json({"type": "error", "message": "Subject not found"})
+                        await websocket.send_json(
+                            {"type": "error", "message": "Subject not found"}
+                        )
                         continue
 
-                    if (
-                        user.get("role") != "admin"
-                        and user["_id"] not in subject.get("professor_ids", [])
+                    if user.get("role") != "admin" and user["_id"] not in subject.get(
+                        "professor_ids", []
                     ):
                         logger.warning(
                             f"Subject mismatch for user {user_id}. Subject: {subject_id}"
@@ -164,7 +179,9 @@ async def websocket_endpoint(
                         return
 
                     student_user_ids = [
-                        s["student_id"] for s in subject.get("students", []) if s.get("verified", False)
+                        s["student_id"]
+                        for s in subject.get("students", [])
+                        if s.get("verified", False)
                     ]
 
                     students_cursor = db.students.find(
@@ -178,10 +195,12 @@ async def websocket_endpoint(
 
                     candidate_embeddings = []
                     for s in students_list:
-                        candidate_embeddings.append({
-                            "student_id": str(s["userId"]),
-                            "embeddings": s["face_embeddings"]
-                        })
+                        candidate_embeddings.append(
+                            {
+                                "student_id": str(s["userId"]),
+                                "embeddings": s["face_embeddings"],
+                            }
+                        )
 
                     # Process Each Face (Streaming)
                     matched_results = []
@@ -191,7 +210,7 @@ async def websocket_endpoint(
                         match_resp = await ml_client.match_faces(
                             query_embedding=face["embedding"],
                             candidate_embeddings=candidate_embeddings,
-                            threshold=ML_CONFIDENT_THRESHOLD
+                            threshold=ML_CONFIDENT_THRESHOLD,
                         )
 
                         if not match_resp.get("success"):
@@ -216,15 +235,32 @@ async def websocket_endpoint(
                             elif distance < ML_UNCERTAIN_THRESHOLD:
                                 status_str = "uncertain"
                                 match_found = True
-                            
+
                             if match_found:
-                                matched_student = next((s for s in students_list if str(s["userId"]) == best_student_id), None)
+                                matched_student = next(
+                                    (
+                                        s
+                                        for s in students_list
+                                        if str(s["userId"]) == best_student_id
+                                    ),
+                                    None,
+                                )
                                 if matched_student:
-                                    user_info = await db.users.find_one({"_id": matched_student["userId"]}, {"name": 1, "roll": 1})
+                                    user_info = await db.users.find_one(
+                                        {"_id": matched_student["userId"]},
+                                        {"name": 1, "roll": 1},
+                                    )
                                     student_details = {
                                         "id": str(matched_student["userId"]),
-                                        "name": matched_student.get("name") or (user_info.get("name") if user_info else "Unknown"),
-                                        "roll": user_info.get("roll") if user_info else ""
+                                        "name": matched_student.get("name")
+                                        or (
+                                            user_info.get("name")
+                                            if user_info
+                                            else "Unknown"
+                                        ),
+                                        "roll": user_info.get("roll")
+                                        if user_info
+                                        else "",
                                     }
 
                         # Check liveness
@@ -246,33 +282,56 @@ async def websocket_endpoint(
                             },
                             "status": status_str,
                             "distance": round(distance, 4) if best_student_id else None,
-                            "confidence": round(confidence, 3) if best_student_id else None,
-                            "student": student_details
+                            "confidence": round(confidence, 3)
+                            if best_student_id
+                            else None,
+                            "student": student_details,
                         }
 
                         if status_str == "present" or status_str == "uncertain":
-                             matched_results.append(result_item)
+                            matched_results.append(result_item)
                         else:
-                             unmatched_results.append(result_item)
+                            unmatched_results.append(result_item)
 
                         # Send incremental update per face
-                        await websocket.send_json({
-                            "type": "match_update",
-                            "match": result_item,
-                            "pending": count - (i + 1)
-                        })
+                        await websocket.send_json(
+                            {
+                                "type": "match_update",
+                                "match": result_item,
+                                "pending": count - (i + 1),
+                            }
+                        )
 
                     # Final Complete Message
-                    await websocket.send_json({
-                        "type": "complete",
-                        "status": "complete",
-                        "matched": matched_results,
-                        "unmatched": unmatched_results
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "complete",
+                            "status": "complete",
+                            "matched": matched_results,
+                            "unmatched": unmatched_results,
+                        }
+                    )
 
                 except Exception as ex:
                     logger.error(f"Error processing frame: {ex}", exc_info=True)
-                    await websocket.send_json({"type": "error", "message": f"Processing failed: {str(ex)}"})
+                    await websocket.send_json(
+                        {
+                            "type": "error",
+                            "message": f"Processing failed: {str(ex)}",
+                        }
+                    )
+                    await websocket.send_json(
+                        {
+                            "type": "complete",
+                            "status": "failed",
+                            "matched": matched_results
+                            if "matched_results" in locals()
+                            else [],
+                            "unmatched": unmatched_results
+                            if "unmatched_results" in locals()
+                            else [],
+                        }
+                    )
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: {session_id}")

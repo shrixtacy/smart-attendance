@@ -213,6 +213,9 @@ export default function MarkAttendance() {
 
   useEffect(() => {
     if(!selectedSubject) return;
+    setAttendanceSubmitted(false);
+    setDetections([]);
+
     fetchSubjectStudents(selectedSubject).then((data) => {
       setStudents(data);
       // Initialize attendance map directly here to avoid cascading render
@@ -230,6 +233,7 @@ export default function MarkAttendance() {
   }, [selectedSubject])
 
   const wsRef = useRef(null);
+  const frameInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!selectedSubject || attendanceSubmitted) return;
@@ -254,6 +258,7 @@ export default function MarkAttendance() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === "processing_started") {
+          frameInFlightRef.current = true;
           setMlStatus("processing");
           setDetections([]); // Clear previous frame results
         } else if (data.type === "match_update") {
@@ -273,8 +278,10 @@ export default function MarkAttendance() {
             });
           }
         } else if (data.type === "complete") {
+          frameInFlightRef.current = false;
           setMlStatus("ready");
         } else if (data.type === "error") {
+          frameInFlightRef.current = false;
           console.error("WS Error:", data.message);
         }
       } catch (err) {
@@ -288,9 +295,14 @@ export default function MarkAttendance() {
 
     // Send frame periodically via WebSocket
     const interval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN && webcamRef.current) {
+      if (
+        ws.readyState === WebSocket.OPEN &&
+        webcamRef.current &&
+        !frameInFlightRef.current
+      ) {
         const image = webcamRef.current.getScreenshot();
         if (image) {
+          frameInFlightRef.current = true;
           ws.send(JSON.stringify({
             command: "process_frame",
             image,
@@ -302,6 +314,7 @@ export default function MarkAttendance() {
 
     return () => {
       clearInterval(interval);
+      frameInFlightRef.current = false;
       ws.close();
     };
   }, [selectedSubject, attendanceSubmitted]);
