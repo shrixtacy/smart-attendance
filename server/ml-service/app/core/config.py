@@ -46,8 +46,9 @@ class Settings(BaseSettings):
                 "ML_API_KEY environment variable is required. "
                 "Set ML_API_KEY (or legacy API_KEY) to configure the ML service API key."
             )
-        # Ensure ML_API_KEY is set for consistent access
+        # Keep both fields in sync for legacy and current access paths
         self.ML_API_KEY = api_key
+        self.API_KEY = api_key
         return self
 
     @property

@@ -8,7 +8,11 @@ from bson import errors as bson_errors
 from fastapi import APIRouter, HTTPException, Request
 
 from geopy.distance import geodesic
-from app.core.config import ML_CONFIDENT_THRESHOLD, ML_UNCERTAIN_THRESHOLD, RATE_LIMIT_ATTENDANCE_MARK
+from app.core.config import (
+    ML_CONFIDENT_THRESHOLD,
+    ML_UNCERTAIN_THRESHOLD,
+    RATE_LIMIT_ATTENDANCE_MARK,
+)
 from app.db.mongo import db
 from app.services.attendance_daily import save_daily_summary
 from app.services.attendance import log_grouped_attendance

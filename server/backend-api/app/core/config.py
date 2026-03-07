@@ -65,8 +65,6 @@ ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 ML_SERVICE_TIMEOUT = float(os.getenv("ML_SERVICE_TIMEOUT", "30"))
 ML_SERVICE_MAX_RETRIES = int(os.getenv("ML_SERVICE_MAX_RETRIES", "3"))
 ML_API_KEY = os.getenv("ML_API_KEY")
-if not ML_API_KEY:
-    raise ValueError("ML_API_KEY environment variable is required")
 
 # Rate Limiting Configuration
 RATE_LIMIT_LOGIN = os.getenv("RATE_LIMIT_LOGIN", "10/minute")
