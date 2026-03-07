@@ -29,7 +29,7 @@ def test_mark_attendance_missing_user_id_in_token():
             "X-Device-ID": "test-device",
         }
 
-        # We need to post some data. 
+        # We need to post some data.
         # The route /attendance/mark first checks headers (Device ID, Auth) before payload validation
         response = client.post(
             "/attendance/mark", json={"some": "data"}, headers=headers
@@ -52,10 +52,10 @@ async def test_mark_attendance_service_error_handling():
         # Valid payload required to pass validation
         valid_payload = {
             "student_id": "123",
-            "class_id": "math101", 
-            "date": "2024-01-01", 
+            "class_id": "math101",
+            "date": "2024-01-01",
             "period": 1,
-            "status": "present"
+            "status": "present",
         }
 
         with pytest.raises(Exception) as excinfo:
@@ -63,36 +63,38 @@ async def test_mark_attendance_service_error_handling():
 
         assert "DB Error" in str(excinfo.value)
 
+
 @pytest.mark.asyncio
 async def test_mark_attendance_duplicate_check():
     """Test that duplicate attendance raises 409."""
     with patch("app.services.attendance.attendance_col") as mock_col:
         # Mock find_one to return existing record
         mock_col.find_one = AsyncMock(return_value={"_id": "existing"})
-        
+
         valid_payload = {
             "student_id": "123",
-            "class_id": "math101", 
-            "date": "2024-01-01", 
+            "class_id": "math101",
+            "date": "2024-01-01",
             "period": 1,
-            "status": "present"
+            "status": "present",
         }
-        
+
         with pytest.raises(HTTPException) as excinfo:
             await mark_attendance(valid_payload)
-            
+
         assert excinfo.value.status_code == 409
         assert "Attendance already marked" in excinfo.value.detail
+
 
 @pytest.mark.asyncio
 async def test_mark_attendance_validation_error():
     """Test that missing fields raise 422."""
-    with patch("app.services.attendance.attendance_col") as mock_col:
-        payload = {"student_id": "123"} # Missing class_id, date, etc.
-        
+    with patch("app.services.attendance.attendance_col"):
+        payload = {"student_id": "123"}  # Missing class_id, date, etc.
+
         with pytest.raises(HTTPException) as excinfo:
             await mark_attendance(payload)
-            
+
         assert excinfo.value.status_code == 422
         assert "Missing required field" in excinfo.value.detail
 
