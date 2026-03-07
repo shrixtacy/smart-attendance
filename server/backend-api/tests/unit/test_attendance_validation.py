@@ -23,7 +23,7 @@ async def test_mark_attendance_validation_missing_fields():
     with pytest.raises(HTTPException) as excinfo:
         await mark_attendance(payload)
 
-    assert excinfo.value.status_code == 400
+    assert excinfo.value.status_code == 422
     assert "Missing required fields" in excinfo.value.detail
 
 

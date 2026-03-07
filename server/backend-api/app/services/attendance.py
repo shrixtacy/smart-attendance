@@ -23,6 +23,7 @@ async def ensure_indexes():
         logger.info("Attendance indexes ensured")
     except Exception as e:
         logger.error("Failed to create attendance indexes", error=str(e))
+        raise
 
 
 async def mark_attendance(attendance_payload: dict):
@@ -61,11 +62,6 @@ async def mark_attendance(attendance_payload: dict):
         existing_record = await attendance_col.find_one(duplicate_query)
 
         if existing_record:
-            logger.warning(
-                "Duplicate attendance attempt",
-                student_id=payload.get("student_id"),
-                class_id=payload.get("class_id"),
-            )
             raise DuplicateKeyError("Attendance already marked")
 
         # 3. Create record
@@ -89,14 +85,20 @@ async def mark_attendance(attendance_payload: dict):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
     except DuplicateKeyError:
-        logger.warning("Duplicate attendance attempt", payload=attendance_payload)
+        logger.warning(
+            "Duplicate attendance attempt",
+            student_id=attendance_payload.get("student_id"),
+            class_id=attendance_payload.get("class_id"),
+            date=attendance_payload.get("date"),
+            period=attendance_payload.get("period"),
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Attendance already marked for this period",
         )
-    except Exception as e:
-        logger.error("Error marking attendance", error=str(e))
-        raise e
+    except Exception:
+        logger.exception("Error marking attendance")
+        raise
 
 
 async def log_grouped_attendance(
