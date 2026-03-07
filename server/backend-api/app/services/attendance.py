@@ -35,12 +35,14 @@ async def mark_attendance(payload: dict):
 
         # 2. Check for duplicate attendance
         # Check if attendance already exists for this student, class, date, period
-        existing_record = await attendance_col.find_one({
-            "student_id": payload["student_id"],
-            "class_id": payload["class_id"],
-            "date": payload["date"],
-            "period": payload["period"]
-        })
+        existing_record = await attendance_col.find_one(
+            {
+                "student_id": payload["student_id"],
+                "class_id": payload["class_id"],
+                "date": payload["date"],
+                "period": payload["period"],
+            }
+        )
 
         if existing_record:
             raise DuplicateKeyError("Attendance already marked")
@@ -48,7 +50,7 @@ async def mark_attendance(payload: dict):
         # 3. Create record
         payload["created_at"] = datetime.now(timezone.utc).isoformat()
         result = await attendance_col.insert_one(payload)
-        
+
         attendance_record = await attendance_col.find_one({"_id": result.inserted_id})
         attendance_record["_id"] = str(attendance_record["_id"])
         return attendance_record
@@ -56,14 +58,13 @@ async def mark_attendance(payload: dict):
     except (ValueError, TypeError) as e:
         logger.warning(f"Validation error in mark_attendance: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)
         )
     except DuplicateKeyError:
         logger.warning(f"Duplicate attendance attempt: {payload}")
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Attendance already marked for this period"
+            detail="Attendance already marked for this period",
         )
     except Exception as e:
         logger.error(f"Error marking attendance: {str(e)}")
