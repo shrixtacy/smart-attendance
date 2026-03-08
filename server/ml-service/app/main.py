@@ -1,6 +1,5 @@
 import os
 import time
-import logging
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,10 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+import structlog
 
 from app.core.config import settings
 from app.api.routes.face_recognition import router as ml_router
 from app.core.security import verify_api_key
+from app.ml.face_detector import _check_model_exists
 
 # New Imports
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -28,9 +29,8 @@ from .middleware.timing import TimingMiddleware
 
 from .api.routes.health import router as health_router
 
-# Setup logging
-setup_logging()
-logger = logging.getLogger(settings.SERVICE_NAME)
+setup_logging(service_name=settings.SERVICE_NAME)
+logger = structlog.get_logger()
 
 if SENTRY_DSN := os.getenv("SENTRY_DSN"):
     sentry_sdk.init(
@@ -47,10 +47,17 @@ service_start_time = time.time()
 def create_app() -> FastAPI:
     """Create and configure the ML Service FastAPI application"""
 
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # Fail fast at boot if the face detector model is missing.
+        _check_model_exists()
+        yield
+
     app = FastAPI(
         title=settings.SERVICE_NAME,
         version=settings.SERVICE_VERSION,
         description="Machine Learning Service for Face Recognition",
+        lifespan=lifespan,
     )
 
     @app.middleware("http")

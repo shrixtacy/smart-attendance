@@ -3,7 +3,6 @@ from httpx import AsyncClient
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from app.main import create_app
-from app.db.mongo import db
 from app.core.security import hash_password
 from app.utils.jwt_token import hash_refresh_token, decode_jwt
 
@@ -17,7 +16,7 @@ async def client(app):
         yield ac
 
 @pytest.fixture
-async def test_user():
+async def test_user(db):
     user_doc = {
         "name": "Test User",
         "email": "testuser@example.com",
@@ -36,7 +35,7 @@ async def test_user():
     await db.refresh_tokens.delete_many({"user_id": result.inserted_id})
 
 @pytest.mark.asyncio
-async def test_login_creates_refresh_token(client, test_user):
+async def test_login_creates_refresh_token(client, test_user, db):
     response = await client.post(
         "/auth/login",
         json={"email": test_user["email"], "password": "password123"}
@@ -55,7 +54,7 @@ async def test_login_creates_refresh_token(client, test_user):
     assert stored_token["revoked"] is False
 
 @pytest.mark.asyncio
-async def test_refresh_token_generates_new_tokens(client, test_user):
+async def test_refresh_token_generates_new_tokens(client, test_user, db):
     login_response = await client.post(
         "/auth/login",
         json={"email": test_user["email"], "password": "password123"}
@@ -101,7 +100,7 @@ async def test_refresh_with_revoked_token_fails(client, test_user):
     assert "Invalid or revoked refresh token" in second_refresh.json()["detail"]
 
 @pytest.mark.asyncio
-async def test_logout_revokes_refresh_tokens(client, test_user):
+async def test_logout_revokes_refresh_tokens(client, test_user, db):
     login_response = await client.post(
         "/auth/login",
         json={"email": test_user["email"], "password": "password123"}
@@ -122,7 +121,7 @@ async def test_logout_revokes_refresh_tokens(client, test_user):
     assert stored_token["revoked"] is True
 
 @pytest.mark.asyncio
-async def test_expired_refresh_token_fails(client, test_user):
+async def test_expired_refresh_token_fails(client, test_user, db):
     login_response = await client.post(
         "/auth/login",
         json={"email": test_user["email"], "password": "password123"}

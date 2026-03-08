@@ -1,4 +1,6 @@
+from datetime import datetime
 import base64
+import structlog
 from webauthn import (
     generate_registration_options,
     verify_registration_response,
@@ -17,7 +19,8 @@ from webauthn.helpers.structs import (
 )
 
 from app.db.mongo import db
-from datetime import datetime
+
+logger = structlog.get_logger()
 
 
 def get_rp_id(origin: str) -> str:
@@ -170,7 +173,8 @@ async def generate_auth_options(user: dict, rp_id: str):
                     )
                 )
             except Exception as e:
-                print(f"Skipping credential due to error: {e}")
+                logger.warning("skipping_credential", error=str(e))
+                pass
 
     if not allow_credentials:
         # If no credentials, we can't authenticate with specific credentials.
@@ -192,7 +196,11 @@ async def generate_auth_options(user: dict, rp_id: str):
         base64.urlsafe_b64encode(options.challenge).decode("ascii").rstrip("=")
     )
 
-    print(f"DEBUG: Setting challenge for user {user['_id']}: {challenge_b64}")
+    logger.info(
+        "webauthn.setting_challenge",
+        user_id=str(user["_id"]),
+        challenge_present=bool(challenge_b64),
+    )
 
     await db.users.update_one(
         {"_id": user["_id"]}, {"$set": {"current_challenge": challenge_b64}}
@@ -204,10 +212,10 @@ async def generate_auth_options(user: dict, rp_id: str):
 async def verify_auth_response(
     user: dict, response: AuthenticationCredential, origin: str, rp_id: str
 ):
-    print(
-        f"DEBUG: Verifying user {user['_id']}. Challenge in DB: "
-        f"{user.get('current_challenge')} "
-        f"(type: {type(user.get('current_challenge'))})"
+    logger.info(
+        "webauthn.verifying_user",
+        user_id=str(user["_id"]),
+        has_challenge=bool(user.get("current_challenge")),
     )
 
     expected_challenge = user.get("current_challenge")
@@ -216,16 +224,20 @@ async def verify_auth_response(
         fresh_user = await db.users.find_one({"_id": user["_id"]})
 
         if fresh_user:
-            print(
-                f"DEBUG: Found challenge in fresh user fetch: "
-                f"{fresh_user.get('current_challenge')}"
+            logger.info(
+                "webauthn.found_challenge_in_fresh_fetch",
+                has_challenge=bool(fresh_user.get("current_challenge")),
             )
             expected_challenge = fresh_user.get("current_challenge")
             user = fresh_user  # update reference
         else:
-            print("DEBUG: Still no challenge found after re-fetch.")
+            logger.warning("webauthn.no_challenge_found_after_refetch")
 
     if not expected_challenge:
+        # Emergency log to see what the user object actually contains
+        logger.error(
+            "webauthn.no_authentication_challenge_found", user_keys=list(user.keys())
+        )
         raise ValueError("No authentication challenge found")
 
     # Find credential public key
@@ -275,10 +287,9 @@ async def verify_auth_response(
                 "webauthn_credentials.$.sign_count": verification.new_sign_count,
                 "current_challenge": "",
             }
-        },
+        },  # Clear challenge
     )
-    # Note: clearing challenge prevents replay but might cause issues if
-    # verification fails and we want to retry?
+    # Note: clearing challenge prevents replay.
     # Standard practice is to generate new challenge on retry.
 
     return verification

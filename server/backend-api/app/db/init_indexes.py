@@ -31,7 +31,7 @@ async def create_indexes():
         logger.info("Created unique index on refresh_tokens.token_hash")
         
     except Exception as e:
-        logger.error(f"Error creating indexes: {e}")
+        logger.error(f"Error creating indexes: {e}", exc_info=True)
         raise
     finally:
         client.close()

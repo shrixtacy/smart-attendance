@@ -15,6 +15,9 @@ from webauthn.helpers import (
 from webauthn import options_to_json
 
 from bson import ObjectId
+import structlog
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/webauthn", tags=["WebAuthn"])
 
@@ -40,9 +43,7 @@ async def register_options(
         options = await generate_reg_options(user_doc, rp_id, rp_name)
         return Response(content=options_to_json(options), media_type="application/json")
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("webauthn.register_options.failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -64,9 +65,7 @@ async def register_verify(
         result = await verify_reg_response(user_doc, credential, origin, rp_id)
         return {"status": "success", "credential_id": result["credential_id"]}
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("webauthn.register_verify.failed", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -85,18 +84,14 @@ async def authenticate_options(
         # Start registration or auth
         options = await generate_auth_options(user_doc, rp_id)
 
-        # Verify persistence immediately for debugging
-        check_user = await db.users.find_one({"_id": user_doc["_id"]})
-        print(
-            f"[DEBUG] Auth Options Generated. Challenge set to: "
-            f"{check_user.get('current_challenge')}"
+        logger.debug(
+            "webauthn.auth_options_generated",
+            challenge_present=True if options.challenge else False,
         )
 
         return Response(content=options_to_json(options), media_type="application/json")
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.error("webauthn.auth_options_error", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -114,16 +109,15 @@ async def authenticate_verify(
         if not user_doc:
             raise HTTPException(status_code=404, detail="User not found")
 
-        print(
-            f"[DEBUG] Verify called for user {user_doc['_id']}. "
-            f"Current Challenge: {user_doc.get('current_challenge')}"
+        logger.debug(
+            "webauthn.verify_called",
+            user_id=str(user_doc["_id"]),
+            challenge_present=bool(user_doc.get("current_challenge")),
         )
 
         credential = parse_authentication_credential_json(body)
         await verify_auth_response(user_doc, credential, origin, rp_id)
         return {"status": "success"}
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("webauthn.verify_failed", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))

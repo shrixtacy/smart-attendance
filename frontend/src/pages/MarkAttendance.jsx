@@ -25,7 +25,6 @@ import { saveOfflineAttendance, getOfflineAttendanceCount } from "../utils/offli
 import toast from 'react-hot-toast';
 import { useNavigate } from "react-router-dom";
 import { fetchMySubjects, fetchSubjectStudents } from "../api/teacher";
-import { captureAndSend } from "../api/attendance";
 import FaceOverlay from "../components/FaceOverlay";
 import api from "../api/axiosClient";
 import StartAttendanceModal from "../components/attendance/StartAttendanceModal";
@@ -196,6 +195,13 @@ export default function MarkAttendance() {
             {t('mark_attendance.status.waking_up')}
           </span>
         );
+      case "processing":
+        return (
+           <span className="px-2.5 py-0.5 bg-[var(--bg-secondary)] text-[var(--text-body)] text-xs font-bold uppercase rounded-full flex items-center gap-1.5">
+             <Loader2 size={10} className="animate-spin" />
+             {t('mark_attendance.status.processing') || "Processing"}
+           </span>
+        );
       case "checking":
       default:
         return (
@@ -213,6 +219,7 @@ export default function MarkAttendance() {
 
   useEffect(() => {
     if(!selectedSubject) return;
+
     fetchSubjectStudents(selectedSubject).then((data) => {
       setStudents(data);
       // Initialize attendance map directly here to avoid cascading render
@@ -229,15 +236,132 @@ export default function MarkAttendance() {
     });
   }, [selectedSubject])
 
+  const wsRef = useRef(null);
+  const frameInFlightRef = useRef(false);
+  const disconnectRef = useRef(false);
+
   useEffect(() => {
-    if (!selectedSubject || !webcamRef.current) return;
+    if (!selectedSubject || attendanceSubmitted) return;
 
+    disconnectRef.current = false;
+    let reconnectTimeout;
+
+    const connectWebSocket = async () => {
+      if (disconnectRef.current) return;
+
+      // Determine WebSocket URL
+      const apiBase = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const wsBase = apiBase.replace(/^http/, "ws");
+      const sessionId = `mk-${Date.now()}`;
+      const token = localStorage.getItem("token");
+      
+      if (!token) {
+        console.warn("WS Connect: No token found in localStorage");
+        setMlStatus("checking");
+        // Trigger a check to potentially redirect
+        api.get('/auth/me').catch(e => console.error("Auth check failed", e));
+        return;
+      }
+
+      const wsUrl = `${wsBase}/attendance/ws/${sessionId}?token=${token}`;
+
+      console.log("Connecting WS:", `${wsBase}/attendance/ws/${sessionId}`);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log("WebSocket Connected");
+        setMlStatus("ready");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "processing_started") {
+            frameInFlightRef.current = true;
+            setMlStatus("processing");
+            setDetections([]); // Clear previous frame results
+          } else if (data.type === "match_update") {
+            const match = data.match;
+            setDetections((prev) => [...prev, match]);
+
+            if (match.status === "present" && match.student) {
+              setAttendanceMap((prev) => {
+                const id = match.student.id;
+                if (!prev[id]) return prev;
+                const updated = { ...prev };
+                const s = { ...updated[id] };
+                s.count = (s.count || 0) + 1;
+                if (s.count >= 3) s.status = "present";
+                updated[id] = s;
+                return updated;
+              });
+            }
+          } else if (data.type === "complete") {
+            frameInFlightRef.current = false;
+            setMlStatus(data.status === "failed" ? "checking" : "ready");
+          } else if (data.type === "error") {
+            frameInFlightRef.current = false;
+            setMlStatus("checking");
+            console.error("WS Error:", data.message);
+          }
+        } catch (err) {
+          console.error("WS Message Parse Error:", err);
+        }
+      };
+
+      ws.onclose = async (event) => {
+        if (disconnectRef.current) return;
+
+        frameInFlightRef.current = false;
+        setMlStatus("checking");
+        console.log("WebSocket Disconnected", event.code);
+
+        // 1008: Policy Violation (Auth failed), 1006: Abnormal Closure
+        if (event.code === 1008 || event.code === 1006) {
+          console.log("WS Auth/Connection issue. Attempting refresh...");
+          try {
+             // Use api client to trigger refresh flow if 401
+             await api.get('/auth/me').catch(() => {});
+             // If we are still here (not redirected by interceptor), try reconnecting
+             reconnectTimeout = setTimeout(connectWebSocket, 2000);
+          } catch (e) {
+             console.error("WS Reconnect failed", e);
+          }
+        }
+      };
+    };
+
+    connectWebSocket();
+
+    // Send frame periodically via WebSocket
     const interval = setInterval(() => {
-      captureAndSend(webcamRef, selectedSubject, setDetections, currentCoordsRef.current);
-    }, 3000);
+      if (
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN &&
+        webcamRef.current &&
+        !frameInFlightRef.current
+      ) {
+        const image = webcamRef.current.getScreenshot();
+        if (image) {
+          frameInFlightRef.current = true;
+          wsRef.current.send(JSON.stringify({
+            command: "process_frame",
+            image,
+            subject_id: selectedSubject
+          }));
+        }
+      }
+    }, 1000); // 1 second interval
 
-    return () => clearInterval(interval);
-  }, [selectedSubject]);
+    return () => {
+      disconnectRef.current = true;
+      clearInterval(interval);
+      clearTimeout(reconnectTimeout);
+      frameInFlightRef.current = false;
+      if (wsRef.current) wsRef.current.close();
+    };
+  }, [selectedSubject, attendanceSubmitted]);
 
   const presentStudents = Object.values(attendanceMap)
     .filter((s) => s.status === "present")
@@ -306,39 +430,7 @@ export default function MarkAttendance() {
     }
   };
 
-  useEffect(() => {
-    if (!detections.length) return;
-    
-    // Wrap in setTimeout to avoid synchronous state update warning (Cascading update)
-    const timeoutId = setTimeout(() => {
-      setAttendanceMap((prev) => {
-        const updated = { ...prev };
-        let hasChanges = false;
 
-        detections.forEach((f) => {
-          if (f.status !== "present" || !f.student) return;
-
-          const id = f.student.id;
-
-          if (!updated[id]) return;
-
-          // increment detection count
-          updated[id].count += 1;
-          
-          hasChanges = true;
-
-          // mark present after 3 confirmations
-          if (updated[id].count >= 3) {
-            updated[id].status = "present";
-          }
-        });
-
-        return hasChanges ? updated : prev;
-      });
-    }, 0);
-    
-    return () => clearTimeout(timeoutId);
-  }, [detections]);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] p-6 md:p-8">
@@ -397,7 +489,11 @@ export default function MarkAttendance() {
             <label className="text-xs font-semibold text-[var(--text-body)] uppercase tracking-wide">{t('mark_attendance.class_label')}</label>
             <select
                 value={selectedSubject || ""}
-                onChange={(e) => setSelectedSubject(e.target.value)}
+                onChange={(e) => {
+                  setSelectedSubject(e.target.value);
+                  setAttendanceSubmitted(false);
+                  setDetections([]);
+                }}
                 className="w-full p-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[var(--text-main)] outline-none focus:ring-2 focus:ring-[var(--primary)]"
               >
                 <option disabled value="">{t('mark_attendance.select_subject')}</option>

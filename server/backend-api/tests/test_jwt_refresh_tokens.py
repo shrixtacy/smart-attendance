@@ -1,6 +1,12 @@
 import pytest
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
+import jwt
+import os
+
+# Set fallback test JWT_SECRET BEFORE importing JWT utilities so module reads test secret on load
+os.environ.setdefault("JWT_SECRET", "test-secret-key")
+
 from app.utils.jwt_token import (
     create_access_token,
     create_refresh_token,
@@ -8,10 +14,8 @@ from app.utils.jwt_token import (
     hash_refresh_token,
     generate_session_id,
 )
-import jwt
-import os
 
-JWT_SECRET = os.getenv("JWT_SECRET", "test-secret-key")
+JWT_SECRET = os.getenv("JWT_SECRET")
 
 @pytest.fixture
 def mock_user():

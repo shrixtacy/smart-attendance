@@ -90,25 +90,26 @@ def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
 def _get_rate_limit_key_func():
     """
     Get the appropriate key function for rate limiting.
-    
+
     For authenticated attendance endpoints, prefers user_id over IP to avoid
     shared rate limit buckets. Falls back to client IP for unauthenticated requests.
-    
+
     Uses X-Forwarded-For header only if the immediate peer is a trusted proxy,
     otherwise falls back to remote address to prevent IP spoofing.
     """
+
     def key_func(request):
         """
         Rate limit key function that prefers user_id for authenticated requests.
-        
+
         Checks for user_id in:
         1. request.state.user_id - set by get_current_user dependency
         2. Authorization header - decode JWT to extract user_id for manual auth
-        
+
         Falls back to client IP for unauthenticated requests.
         """
         return get_default_rate_limit_key(request)
-    
+
     return key_func
 
 

@@ -980,6 +980,7 @@ async def logout(request: Request):
         user_id = decoded.get("user_id")
         session_id = decoded.get("session_id")
 
+
         if not user_id:
             raise HTTPException(
                 status_code=401, detail="Invalid token payload: missing user_id"
